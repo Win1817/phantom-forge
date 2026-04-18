@@ -43,6 +43,20 @@ export default function Decksmith() {
   const [exportOpen, setExportOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [lastGenerated, setLastGenerated] = useState<number>(0);
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const COOLDOWN_MS = 15_000;
+
+  useEffect(() => {
+    if (lastGenerated === 0) return;
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((COOLDOWN_MS - (Date.now() - lastGenerated)) / 1000));
+      setCooldownRemaining(remaining);
+    };
+    tick();
+    const interval = setInterval(tick, 500);
+    return () => clearInterval(interval);
+  }, [lastGenerated]);
 
   const toggleColor = (c: string) =>
     setSelectedColors((prev) =>
@@ -51,6 +65,11 @@ export default function Decksmith() {
 
   const generate = async () => {
     if (!user) { toast.error("Sign in required"); return; }
+    if (Date.now() - lastGenerated < COOLDOWN_MS) {
+      toast.error(`Please wait ${cooldownRemaining}s before generating again.`);
+      return;
+    }
+    setLastGenerated(Date.now());
     setGenerating(true);
     setGenerated(null);
     try {
@@ -275,11 +294,13 @@ export default function Decksmith() {
 
           <Button
             onClick={generate}
-            disabled={generating}
-            className="w-full h-11 bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90 font-semibold"
+            disabled={generating || cooldownRemaining > 0}
+            className="w-full h-11 bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90 font-semibold disabled:opacity-50"
           >
             {generating ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Conjuring deck…</>
+            ) : cooldownRemaining > 0 ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Ready in {cooldownRemaining}s…</>
             ) : (
               <><Wand2 className="mr-2 h-4 w-4" /> Summon Deck</>
             )}
