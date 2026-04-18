@@ -87,6 +87,7 @@ export type Database = {
         Row: {
           card_name: string
           cmc: number | null
+          collector_number: string | null
           colors: string[] | null
           created_at: string
           deck_id: string
@@ -97,11 +98,13 @@ export type Database = {
           mana_cost: string | null
           quantity: number
           scryfall_id: string
+          set_code: string | null
           type_line: string | null
         }
         Insert: {
           card_name: string
           cmc?: number | null
+          collector_number?: string | null
           colors?: string[] | null
           created_at?: string
           deck_id: string
@@ -112,11 +115,13 @@ export type Database = {
           mana_cost?: string | null
           quantity?: number
           scryfall_id: string
+          set_code?: string | null
           type_line?: string | null
         }
         Update: {
           card_name?: string
           cmc?: number | null
+          collector_number?: string | null
           colors?: string[] | null
           created_at?: string
           deck_id?: string
@@ -127,6 +132,7 @@ export type Database = {
           mana_cost?: string | null
           quantity?: number
           scryfall_id?: string
+          set_code?: string | null
           type_line?: string | null
         }
         Relationships: [
