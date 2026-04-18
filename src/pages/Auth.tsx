@@ -7,10 +7,32 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { Eye, EyeOff, ArrowLeft, Sparkles } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, Sparkles, AtSign, Wand2 } from "lucide-react";
 
 const emailSchema = z.string().trim().email("Invalid email").max(255);
 const passwordSchema = z.string().min(6, "At least 6 characters").max(72);
+
+/** Returns true if the value looks like an email address. */
+const looksLikeEmail = (value: string) => value.includes("@");
+
+/**
+ * Resolves a sign-in identifier to an email.
+ * - If identifier contains "@" → treated as email, returned as-is.
+ * - Otherwise → calls DB RPC get_email_by_display_name to look up by planeswalker name.
+ * Returns null if no matching account is found.
+ */
+async function resolveIdentifier(identifier: string): Promise<string | null> {
+  const trimmed = identifier.trim();
+  if (looksLikeEmail(trimmed)) return trimmed;
+
+  const { data, error } = await supabase.rpc("get_email_by_display_name", {
+    p_display_name: trimmed,
+  });
+
+  if (error) throw new Error("Could not look up that Planeswalker name.");
+  if (!data) return null;
+  return data as string;
+}
 
 const MANA_COLORS = [
   { symbol: "W", bg: "hsl(48 90% 88%)", shadow: "hsl(48 90% 75% / 0.7)", color: "#78350f" },
@@ -25,13 +47,20 @@ const Auth = () => {
   const [tab, setTab] = useState<"signin" | "signup">(
     params.get("mode") === "signup" ? "signup" : "signin"
   );
+
+  // Sign-in: one identifier field that accepts email OR planeswalker display_name
+  const [identifier, setIdentifier] = useState("");
+  // Sign-up: separate email and optional display name
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+
+  const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+
+  const identifierIsEmail = looksLikeEmail(identifier);
 
   useEffect(() => {
     if (!loading && user) navigate("/app", { replace: true });
@@ -39,14 +68,15 @@ const Auth = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const emailResult = emailSchema.safeParse(email);
     const pwResult = passwordSchema.safeParse(password);
-    if (!emailResult.success) { toast.error(emailResult.error.issues[0].message); return; }
     if (!pwResult.success) { toast.error(pwResult.error.issues[0].message); return; }
 
     setBusy(true);
     try {
       if (tab === "signup") {
+        const emailResult = emailSchema.safeParse(email);
+        if (!emailResult.success) { toast.error(emailResult.error.issues[0].message); return; }
+
         const { error } = await supabase.auth.signUp({
           email: emailResult.data,
           password: pwResult.data,
@@ -58,12 +88,28 @@ const Auth = () => {
         if (error) throw error;
         toast.success("Welcome, Planeswalker. Check your inbox if confirmation is required.");
       } else {
+        if (!identifier.trim()) {
+          toast.error("Enter your email or Planeswalker name.");
+          return;
+        }
+
+        const resolvedEmail = await resolveIdentifier(identifier);
+        if (!resolvedEmail) {
+          toast.error("No Planeswalker found by that name. Try your email address instead.");
+          return;
+        }
+        const emailResult = emailSchema.safeParse(resolvedEmail);
+        if (!emailResult.success) {
+          toast.error("Could not resolve a valid email for that identifier.");
+          return;
+        }
+
         const { error } = await supabase.auth.signInWithPassword({
           email: emailResult.data,
           password: pwResult.data,
         });
         if (error) throw error;
-        toast.success("Welcome back.");
+        toast.success("Welcome back, Planeswalker.");
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Authentication failed";
@@ -92,7 +138,7 @@ const Auth = () => {
         }}
       />
 
-      {/* Central glow orb behind logo */}
+      {/* Central glow orb */}
       <div
         className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[400px] rounded-full pointer-events-none"
         style={{ background: "radial-gradient(ellipse, hsl(270 60% 30% / 0.18) 0%, transparent 70%)", animation: "glow-pulse 5s ease-in-out infinite" }}
@@ -162,7 +208,9 @@ const Auth = () => {
               {tab === "signin" ? "Welcome back" : "Join the forge"}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {tab === "signin" ? "Enter your credentials to access your grimoire" : "Create your account and start building"}
+              {tab === "signin"
+                ? "Enter your credentials to access your grimoire"
+                : "Create your account and start building"}
             </p>
           </div>
 
@@ -186,36 +234,79 @@ const Auth = () => {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
+
+            {/* ── SIGN UP fields ── */}
             {tab === "signup" && (
+              <>
+                <div className="space-y-1.5 animate-fade-in">
+                  <Label htmlFor="displayName" className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Planeswalker name{" "}
+                    <span className="normal-case text-muted-foreground/50">(optional)</span>
+                  </Label>
+                  <div className="relative">
+                    <Wand2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50 pointer-events-none" />
+                    <Input
+                      id="displayName"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder="Jace, the Mind Sculptor"
+                      maxLength={50}
+                      className="h-11 pl-9 bg-secondary/30 border-border/50 focus-visible:ring-primary/50"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 animate-fade-in">
+                  <Label htmlFor="email" className="text-xs uppercase tracking-wider text-muted-foreground">Email</Label>
+                  <div className="relative">
+                    <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50 pointer-events-none" />
+                    <Input
+                      id="email"
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@multiverse.com"
+                      autoComplete="email"
+                      className="h-11 pl-9 bg-secondary/30 border-border/50 focus-visible:ring-primary/50"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ── SIGN IN: smart identifier (email OR planeswalker name) ── */}
+            {tab === "signin" && (
               <div className="space-y-1.5 animate-fade-in">
-                <Label htmlFor="displayName" className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Planeswalker name
+                <Label htmlFor="identifier" className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Email or Planeswalker name
                 </Label>
-                <Input
-                  id="displayName"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Jace, the Mind Sculptor"
-                  maxLength={50}
-                  className="h-11 bg-secondary/30 border-border/50 focus-visible:ring-primary/50"
-                />
+                <div className="relative">
+                  {identifierIsEmail ? (
+                    <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary/60 pointer-events-none transition-all" />
+                  ) : (
+                    <Wand2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50 pointer-events-none transition-all" />
+                  )}
+                  <Input
+                    id="identifier"
+                    type="text"
+                    required
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    placeholder="you@multiverse.com or Jace"
+                    autoComplete="username"
+                    className="h-11 pl-9 bg-secondary/30 border-border/50 focus-visible:ring-primary/50"
+                  />
+                </div>
+                {identifier.length > 0 && (
+                  <p className="text-[11px] text-muted-foreground/50">
+                    {identifierIsEmail ? "Signing in with email address" : "Signing in with Planeswalker name"}
+                  </p>
+                )}
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-xs uppercase tracking-wider text-muted-foreground">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@multiverse.com"
-                autoComplete="email"
-                className="h-11 bg-secondary/30 border-border/50 focus-visible:ring-primary/50"
-              />
-            </div>
-
+            {/* Password */}
             <div className="space-y-1.5">
               <Label htmlFor="password" className="text-xs uppercase tracking-wider text-muted-foreground">Password</Label>
               <div className="relative">
