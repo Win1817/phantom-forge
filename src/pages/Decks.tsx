@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Plus, LayersIcon, Upload, Download, Copy, Check,
   Trash2, Loader2, ChevronRight, Swords
@@ -46,6 +46,7 @@ const MANA_COLOR: Record<string, string> = {
 
 export default function Decks() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [decks, setDecks] = useState<Deck[]>([]);
   const [loading, setLoading] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
@@ -173,11 +174,50 @@ export default function Decks() {
         if (insertErr) throw new Error(insertErr.message);
       }
 
-      toast.success(`"${deckName}" imported — ${cardInserts.length} cards`);
+      // Auto-sync to collection: upsert each unique card by scryfall_id
+      const uniqueCards = Object.values(
+        cardInserts.reduce((acc, c) => {
+          if (c.scryfall_id === "unknown") return acc;
+          if (!acc[c.scryfall_id]) acc[c.scryfall_id] = { ...c, total: 0 };
+          acc[c.scryfall_id].total += c.quantity;
+          return acc;
+        }, {} as Record<string, typeof cardInserts[0] & { total: number }>)
+      );
+
+      for (const c of uniqueCards) {
+        const { data: existing } = await supabase
+          .from("collection_cards")
+          .select("id, quantity")
+          .eq("user_id", user.id)
+          .eq("scryfall_id", c.scryfall_id)
+          .maybeSingle();
+
+        if (existing) {
+          await supabase.from("collection_cards")
+            .update({ quantity: existing.quantity + c.total })
+            .eq("id", existing.id);
+        } else {
+          await supabase.from("collection_cards").insert({
+            user_id: user.id,
+            scryfall_id: c.scryfall_id,
+            card_name: c.card_name,
+            set_code: c.set_code ?? null,
+            image_url: c.image_url ?? null,
+            mana_cost: c.mana_cost ?? null,
+            cmc: c.cmc ?? null,
+            type_line: c.type_line ?? null,
+            colors: c.colors ?? [],
+            quantity: c.total,
+          });
+        }
+      }
+
+      toast.success(`"${deckName}" imported — ${cardInserts.length} cards added to deck & collection`);
       setImportOpen(false);
       setImportText("");
       setImportName("");
       load();
+      navigate(`/app/decks/${deck.id}`);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -223,6 +263,7 @@ export default function Decks() {
             <DeckCard
               key={deck.id}
               deck={deck}
+              onOpen={() => navigate(`/app/decks/${deck.id}`)}
               onExport={() => openExport(deck)}
               onDelete={() => deleteDeck(deck.id, deck.name)}
             />
@@ -348,9 +389,9 @@ export default function Decks() {
   );
 }
 
-function DeckCard({ deck, onExport, onDelete }: { deck: Deck; onExport: () => void; onDelete: () => void }) {
+function DeckCard({ deck, onOpen, onExport, onDelete }: { deck: Deck; onOpen: () => void; onExport: () => void; onDelete: () => void }) {
   return (
-    <Card className="group overflow-hidden border-border bg-card card-hover relative">
+    <Card className="group overflow-hidden border-border bg-card card-hover relative cursor-pointer" onClick={onOpen}>
       {/* Cover image or gradient placeholder */}
       <div className="aspect-[16/6] overflow-hidden bg-arcane relative">
         {deck.cover_image_url ? (
@@ -392,7 +433,7 @@ function DeckCard({ deck, onExport, onDelete }: { deck: Deck; onExport: () => vo
             size="sm"
             variant="ghost"
             className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-            onClick={onExport}
+            onClick={(e) => { e.stopPropagation(); onExport(); }}
           >
             <Download className="mr-1 h-3.5 w-3.5" /> Export
           </Button>
@@ -400,7 +441,7 @@ function DeckCard({ deck, onExport, onDelete }: { deck: Deck; onExport: () => vo
             size="sm"
             variant="ghost"
             className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
-            onClick={onDelete}
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>

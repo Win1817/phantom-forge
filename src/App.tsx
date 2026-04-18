@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard.tsx";
 import Collection from "./pages/Collection.tsx";
 import CardSearch from "./pages/CardSearch.tsx";
 import Decks from "./pages/Decks.tsx";
+import DeckDetail from "./pages/DeckDetail.tsx";
 import Decksmith from "./pages/Decksmith.tsx";
 import Scanner from "./pages/Scanner.tsx";
 import Wishlist from "./pages/Wishlist.tsx";
@@ -40,6 +41,7 @@ const App = () => (
             <Route path="collection" element={<Collection />} />
             <Route path="search" element={<CardSearch />} />
             <Route path="decks" element={<Decks />} />
+            <Route path="decks/:id" element={<DeckDetail />} />
             <Route path="decksmith" element={<Decksmith />} />
             <Route path="scanner" element={<Scanner />} />
             <Route path="wishlist" element={<Wishlist />} />
