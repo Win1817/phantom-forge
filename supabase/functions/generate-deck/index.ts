@@ -1,4 +1,4 @@
-// PhantomMTG — AI deck generation edge function.
+// PhantomMTG - AI deck generation edge function (Anthropic Claude).
 // Returns: { name, description, strategy, deckList }
 
 const corsHeaders = {
@@ -12,16 +12,13 @@ Deno.serve(async (req) => {
   try {
     const { format, style, colors, budget, notes } = await req.json();
 
-    const AI_API_KEY = Deno.env.get("OPENAI_API_KEY") || Deno.env.get("AI_API_KEY");
-    if (!AI_API_KEY) {
-      return new Response(JSON.stringify({ error: "Missing AI_API_KEY" }), {
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!ANTHROPIC_API_KEY) {
+      return new Response(JSON.stringify({ error: "Missing ANTHROPIC_API_KEY. Add it in Supabase Dashboard > Project Settings > Edge Functions > Secrets." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const AI_BASE_URL = Deno.env.get("AI_BASE_URL") || "https://api.openai.com/v1";
-    const AI_MODEL = Deno.env.get("AI_MODEL") || "gpt-4o-mini";
 
     const colorNames: Record<string, string> = { W: "White", U: "Blue", B: "Black", R: "Red", G: "Green" };
     const colorStr = colors?.length ? colors.map((c: string) => colorNames[c] ?? c).join(", ") : "any colors";
@@ -47,22 +44,21 @@ Return ONLY valid JSON with these exact keys (no markdown, no code fences):
   "name": "creative deck name",
   "description": "1-2 sentence overview",
   "strategy": "2-3 sentences explaining the win condition and key interactions",
-  "deckList": "Deck\\n4 Lightning Bolt (M11) 149\\n..."
+  "deckList": "Deck\n4 Lightning Bolt (M11) 149\n..."
 }`;
 
-    const aiRes = await fetch(`${AI_BASE_URL}/chat/completions`, {
+    const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${AI_API_KEY}`,
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: AI_MODEL,
-        max_tokens: 2000,
-        messages: [
-          { role: "system", content: "You are a concise MTG deck building expert. Always reply with raw JSON only, no markdown, no code fences." },
-          { role: "user", content: prompt },
-        ],
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 2048,
+        system: "You are a concise MTG deck building expert. Always reply with raw JSON only, no markdown, no code fences.",
+        messages: [{ role: "user", content: prompt }],
       }),
     });
 
@@ -79,7 +75,7 @@ Return ONLY valid JSON with these exact keys (no markdown, no code fences):
     }
 
     const data = await aiRes.json();
-    let content: string = data.choices?.[0]?.message?.content ?? "{}";
+    let content: string = data.content?.[0]?.text ?? "{}";
     content = content.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
 
     let parsed: Record<string, unknown> = {};

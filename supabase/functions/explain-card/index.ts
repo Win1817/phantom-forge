@@ -1,4 +1,4 @@
-// PhantomMTG — AI card explanation edge function.
+// PhantomMTG - AI card explanation edge function (Anthropic Claude).
 // Returns: { simple, howToUse, combos, role, related }
 
 const corsHeaders = {
@@ -18,16 +18,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    const AI_API_KEY = Deno.env.get("OPENAI_API_KEY") || Deno.env.get("AI_API_KEY");
-    if (!AI_API_KEY) {
-      return new Response(JSON.stringify({ error: "Missing AI_API_KEY" }), {
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!ANTHROPIC_API_KEY) {
+      return new Response(JSON.stringify({ error: "Missing ANTHROPIC_API_KEY. Add it in Supabase Dashboard > Project Settings > Edge Functions > Secrets." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const AI_BASE_URL = Deno.env.get("AI_BASE_URL") || "https://api.openai.com/v1";
-    const AI_MODEL = Deno.env.get("AI_MODEL") || "gpt-4o-mini";
 
     const prompt = `You are an MTG coach. Explain this card for a beginner.
 Card: ${card.name}
@@ -46,18 +43,18 @@ Return ONLY valid JSON with these keys:
   "related": ["card name", "card name", "card name"]
 }`;
 
-    const aiRes = await fetch(`${AI_BASE_URL}/chat/completions`, {
+    const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${AI_API_KEY}`,
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: AI_MODEL,
-        messages: [
-          { role: "system", content: "You are a concise MTG expert. Always reply with raw JSON only, no markdown." },
-          { role: "user", content: prompt },
-        ],
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 512,
+        system: "You are a concise MTG expert. Always reply with raw JSON only, no markdown.",
+        messages: [{ role: "user", content: prompt }],
       }),
     });
 
@@ -82,8 +79,7 @@ Return ONLY valid JSON with these keys:
     }
 
     const data = await aiRes.json();
-    let content: string = data.choices?.[0]?.message?.content ?? "{}";
-    // Strip code fences if any
+    let content: string = data.content?.[0]?.text ?? "{}";
     content = content.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
 
     let parsed: Record<string, unknown> = {};
