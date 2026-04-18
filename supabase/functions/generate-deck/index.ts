@@ -78,7 +78,8 @@ Return ONLY valid JSON with these exact keys (no markdown, no code fences):
     }
     if (!aiRes.ok) {
       const t = await aiRes.text();
-      return new Response(JSON.stringify({ error: `AI error: ${t}` }), {
+      console.error(`Gemini error ${aiRes.status}:`, t);
+      return new Response(JSON.stringify({ error: `AI error (${aiRes.status}): ${t}` }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
