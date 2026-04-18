@@ -67,8 +67,8 @@ export function AppLayout() {
               />
             </form>
 
-            {/* User + logout */}
-            <div className="flex items-center gap-2 shrink-0">
+            {/* User + logout — pushed to far right */}
+            <div className="ml-auto flex items-center gap-2 shrink-0">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-arcane font-fantasy text-sm font-bold text-primary ring-1 ring-primary/30">
                 {initial}
               </div>
