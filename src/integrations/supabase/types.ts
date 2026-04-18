@@ -14,7 +14,194 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      collection_cards: {
+        Row: {
+          card_name: string
+          cmc: number | null
+          collector_number: string | null
+          colors: string[] | null
+          condition: string | null
+          created_at: string
+          foil: boolean
+          id: string
+          image_url: string | null
+          mana_cost: string | null
+          notes: string | null
+          price_usd: number | null
+          quantity: number
+          rarity: string | null
+          scryfall_id: string
+          set_code: string | null
+          set_name: string | null
+          type_line: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          card_name: string
+          cmc?: number | null
+          collector_number?: string | null
+          colors?: string[] | null
+          condition?: string | null
+          created_at?: string
+          foil?: boolean
+          id?: string
+          image_url?: string | null
+          mana_cost?: string | null
+          notes?: string | null
+          price_usd?: number | null
+          quantity?: number
+          rarity?: string | null
+          scryfall_id: string
+          set_code?: string | null
+          set_name?: string | null
+          type_line?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          card_name?: string
+          cmc?: number | null
+          collector_number?: string | null
+          colors?: string[] | null
+          condition?: string | null
+          created_at?: string
+          foil?: boolean
+          id?: string
+          image_url?: string | null
+          mana_cost?: string | null
+          notes?: string | null
+          price_usd?: number | null
+          quantity?: number
+          rarity?: string | null
+          scryfall_id?: string
+          set_code?: string | null
+          set_name?: string | null
+          type_line?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      deck_cards: {
+        Row: {
+          card_name: string
+          cmc: number | null
+          colors: string[] | null
+          created_at: string
+          deck_id: string
+          id: string
+          image_url: string | null
+          is_commander: boolean
+          is_sideboard: boolean
+          mana_cost: string | null
+          quantity: number
+          scryfall_id: string
+          type_line: string | null
+        }
+        Insert: {
+          card_name: string
+          cmc?: number | null
+          colors?: string[] | null
+          created_at?: string
+          deck_id: string
+          id?: string
+          image_url?: string | null
+          is_commander?: boolean
+          is_sideboard?: boolean
+          mana_cost?: string | null
+          quantity?: number
+          scryfall_id: string
+          type_line?: string | null
+        }
+        Update: {
+          card_name?: string
+          cmc?: number | null
+          colors?: string[] | null
+          created_at?: string
+          deck_id?: string
+          id?: string
+          image_url?: string | null
+          is_commander?: boolean
+          is_sideboard?: boolean
+          mana_cost?: string | null
+          quantity?: number
+          scryfall_id?: string
+          type_line?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deck_cards_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      decks: {
+        Row: {
+          colors: string[] | null
+          cover_image_url: string | null
+          created_at: string
+          description: string | null
+          format: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          colors?: string[] | null
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          format?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          colors?: string[] | null
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          format?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id: string
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
