@@ -1,4 +1,3 @@
-import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface LogoProps {
@@ -9,11 +8,14 @@ interface LogoProps {
 export function Logo({ className, showText = true }: LogoProps) {
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
-      <div className="relative">
-        <div className="absolute inset-0 rounded-lg bg-primary/30 blur-md animate-glow-pulse" aria-hidden />
-        <div className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-arcane ring-1 ring-primary/40">
-          <Sparkles className="h-5 w-5 text-primary" />
-        </div>
+      <div className="relative flex-shrink-0">
+        <div className="absolute inset-0 rounded-lg bg-primary/20 blur-md animate-glow-pulse" aria-hidden />
+        <img
+          src="/logo.png"
+          alt="PhantomMTG"
+          className="relative h-9 w-auto object-contain"
+          style={{ maxWidth: showText ? "36px" : "36px" }}
+        />
       </div>
       {showText && (
         <div className="leading-none">
@@ -24,3 +26,4 @@ export function Logo({ className, showText = true }: LogoProps) {
     </div>
   );
 }
+

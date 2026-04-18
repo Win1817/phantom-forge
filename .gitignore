@@ -12,7 +12,12 @@ dist
 dist-ssr
 *.local
 
-# Editor directories and files
+# Environment — never commit secrets
+.env
+.env.local
+.env.production
+
+# Editor
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -22,3 +27,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Cloudflare
+.wrangler

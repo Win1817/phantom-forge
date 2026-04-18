@@ -5,7 +5,7 @@ const Decksmith = () => (
   <ComingSoon
     title="AI Decksmith"
     icon={Sparkles}
-    description="Pick a format, playstyle, colors, and budget — the Decksmith analyzes your inventory and conjures the strongest deck possible from cards you already own. Powered by Lovable AI."
+    description="Pick a format, playstyle, colors, and budget — the Decksmith analyzes your inventory and conjures the strongest deck possible from cards you already own."
     cta={{ label: "Add cards first", to: "/app/search" }}
   />
 );

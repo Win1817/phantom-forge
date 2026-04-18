@@ -1,4 +1,4 @@
-// Lovable AI explanation for an MTG card.
+// PhantomMTG — AI card explanation edge function.
 // Returns: { simple, howToUse, combos, role, related }
 
 const corsHeaders = {
@@ -18,13 +18,16 @@ Deno.serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "Missing LOVABLE_API_KEY" }), {
+    const AI_API_KEY = Deno.env.get("OPENAI_API_KEY") || Deno.env.get("AI_API_KEY");
+    if (!AI_API_KEY) {
+      return new Response(JSON.stringify({ error: "Missing AI_API_KEY" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const AI_BASE_URL = Deno.env.get("AI_BASE_URL") || "https://api.openai.com/v1";
+    const AI_MODEL = Deno.env.get("AI_MODEL") || "gpt-4o-mini";
 
     const prompt = `You are an MTG coach. Explain this card for a beginner.
 Card: ${card.name}
@@ -43,14 +46,14 @@ Return ONLY valid JSON with these keys:
   "related": ["card name", "card name", "card name"]
 }`;
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiRes = await fetch(`${AI_BASE_URL}/chat/completions`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${AI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: AI_MODEL,
         messages: [
           { role: "system", content: "You are a concise MTG expert. Always reply with raw JSON only, no markdown." },
           { role: "user", content: prompt },
