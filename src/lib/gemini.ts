@@ -2,32 +2,48 @@
 // (free tier blocks outbound fetch to external domains)
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+// Tries v1 first (works for both AI Studio and Google Cloud keys), falls back gracefully
+const GEMINI_MODELS = [
+  "gemini-2.0-flash",
+  "gemini-2.0-flash-lite",
+  "gemini-1.5-flash",
+];
+
+function geminiUrl(model: string) {
+  return `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+}
 
 async function callGemini(systemPrompt: string, userPrompt: string, maxTokens = 1024): Promise<string> {
   if (!GEMINI_API_KEY) throw new Error("Missing VITE_GEMINI_API_KEY in environment.");
 
-  const res = await fetch(GEMINI_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7 },
-    }),
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+    generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7 },
   });
 
-  if (res.status === 429) throw new Error("Rate limited. Please wait a moment and try again.");
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`Gemini error (${res.status}): ${t}`);
+  let lastError = "";
+  for (const model of GEMINI_MODELS) {
+    const res = await fetch(geminiUrl(model), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+
+    if (res.status === 404) { lastError = `model ${model} not found`; continue; }
+    if (res.status === 429) throw new Error("Rate limited. Please wait a moment and try again.");
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`Gemini error (${res.status}): ${t}`);
+    }
+
+    const data = await res.json();
+    let text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    text = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+    return text;
   }
 
-  const data = await res.json();
-  let text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-  // Strip markdown fences if model wraps output anyway
-  text = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-  return text;
+  throw new Error(`No available Gemini model found. Last error: ${lastError}`);
 }
 
 // ── explain-card ────────────────────────────────────────────────────────────
