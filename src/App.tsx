@@ -5,6 +5,17 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import Auth from "./pages/Auth.tsx";
+import { AppLayout } from "./layouts/AppLayout.tsx";
+import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
+import Dashboard from "./pages/Dashboard.tsx";
+import Collection from "./pages/Collection.tsx";
+import CardSearch from "./pages/CardSearch.tsx";
+import Decks from "./pages/Decks.tsx";
+import Decksmith from "./pages/Decksmith.tsx";
+import Scanner from "./pages/Scanner.tsx";
+import Wishlist from "./pages/Wishlist.tsx";
+import Settings from "./pages/Settings.tsx";
 
 const queryClient = new QueryClient();
 
@@ -16,6 +27,24 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route
+            path="/app"
+            element={
+              <ProtectedRoute>
+                <AppLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Dashboard />} />
+            <Route path="collection" element={<Collection />} />
+            <Route path="search" element={<CardSearch />} />
+            <Route path="decks" element={<Decks />} />
+            <Route path="decksmith" element={<Decksmith />} />
+            <Route path="scanner" element={<Scanner />} />
+            <Route path="wishlist" element={<Wishlist />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
