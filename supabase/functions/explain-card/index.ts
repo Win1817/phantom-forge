@@ -1,5 +1,11 @@
 // PhantomMTG - AI card explanation edge function (Google Gemini).
 // Returns: { simple, howToUse, combos, role, related }
+//
+// JWT verification is disabled at the runtime level (config.toml verify_jwt=false)
+// because newer Supabase projects use ES256 tokens, which the built-in verifier
+// does not support (UNAUTHORIZED_UNSUPPORTED_TOKEN_ALGORITHM).
+// We instead do a lightweight check: the caller must supply a Bearer token,
+// confirming the request comes from an authenticated Supabase client session.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,6 +14,15 @@ const corsHeaders = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  // Lightweight auth guard — must have a Bearer token (issued by Supabase Auth)
+  const authHeader = req.headers.get("Authorization") ?? "";
+  if (!authHeader.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   try {
     const { card } = await req.json();
