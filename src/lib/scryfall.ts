@@ -8,20 +8,41 @@ export interface ScryfallCard {
   cmc?: number;
   type_line?: string;
   oracle_text?: string;
+  flavor_text?: string;
+  power?: string;
+  toughness?: string;
+  loyalty?: string;
   colors?: string[];
   rarity?: string;
   set?: string;
   set_name?: string;
   collector_number?: string;
-  image_uris?: { small?: string; normal?: string; large?: string; art_crop?: string };
-  card_faces?: { image_uris?: { small?: string; normal?: string; large?: string } }[];
-  prices?: { usd?: string | null; usd_foil?: string | null };
+  image_uris?: { small?: string; normal?: string; large?: string; art_crop?: string; png?: string };
+  card_faces?: {
+    name?: string;
+    mana_cost?: string;
+    type_line?: string;
+    oracle_text?: string;
+    flavor_text?: string;
+    power?: string;
+    toughness?: string;
+    loyalty?: string;
+    image_uris?: { small?: string; normal?: string; large?: string; png?: string };
+  }[];
+  prices?: { usd?: string | null; usd_foil?: string | null; eur?: string | null };
+  legalities?: Record<string, string>;
   scryfall_uri?: string;
 }
 
 export function getCardImage(card: ScryfallCard): string | null {
   return card.image_uris?.normal || card.image_uris?.large || card.image_uris?.small ||
     card.card_faces?.[0]?.image_uris?.normal || card.card_faces?.[0]?.image_uris?.large || null;
+}
+
+export function getCardImageLarge(card: ScryfallCard): string | null {
+  return card.image_uris?.large || card.image_uris?.png || card.image_uris?.normal ||
+    card.card_faces?.[0]?.image_uris?.large || card.card_faces?.[0]?.image_uris?.png ||
+    card.card_faces?.[0]?.image_uris?.normal || null;
 }
 
 export async function searchCards(query: string, page = 1): Promise<{ data: ScryfallCard[]; total: number; hasMore: boolean }> {
@@ -40,4 +61,19 @@ export async function autocomplete(query: string): Promise<string[]> {
   if (!res.ok) return [];
   const json = await res.json();
   return json.data ?? [];
+}
+
+const cardCache = new Map<string, ScryfallCard>();
+
+export async function getCardById(id: string): Promise<ScryfallCard> {
+  if (cardCache.has(id)) return cardCache.get(id)!;
+  const res = await fetch(`${BASE}/cards/${id}`);
+  if (!res.ok) throw new Error(`Scryfall error ${res.status}`);
+  const json = (await res.json()) as ScryfallCard;
+  cardCache.set(id, json);
+  return json;
+}
+
+export function primeCardCache(card: ScryfallCard) {
+  if (card?.id) cardCache.set(card.id, card);
 }
