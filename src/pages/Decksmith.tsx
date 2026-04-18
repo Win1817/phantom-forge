@@ -9,6 +9,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { generateDeck, type GeneratedDeck } from "@/lib/gemini";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { exportDeckText, parseDeckText } from "@/lib/deckImportExport";
@@ -23,13 +24,6 @@ const COLORS = [
   { code: "R", label: "Red",   bg: "bg-mana-red text-white" },
   { code: "G", label: "Green", bg: "bg-mana-green text-white" },
 ];
-
-interface GeneratedDeck {
-  name: string;
-  description: string;
-  deckList: string;
-  strategy: string;
-}
 
 export default function Decksmith() {
   const { user } = useAuth();
@@ -73,18 +67,8 @@ export default function Decksmith() {
     setGenerating(true);
     setGenerated(null);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-deck", {
-        body: {
-          format,
-          style,
-          colors: selectedColors,
-          budget,
-          notes: notes.trim(),
-        },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      setGenerated(data as GeneratedDeck);
+      const result = await generateDeck({ format, style, colors: selectedColors, budget, notes: notes.trim() });
+      setGenerated(result);
     } catch (e) {
       toast.error((e as Error).message || "AI generation failed");
     } finally {

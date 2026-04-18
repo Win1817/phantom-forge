@@ -9,15 +9,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Drawer, DrawerContent, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { getCardById, getCardImageLarge, type ScryfallCard } from "@/lib/scryfall";
 import { supabase } from "@/integrations/supabase/client";
+import { explainCard, type AIExplanation } from "@/lib/gemini";
 import { toast } from "sonner";
-
-interface AIExplanation {
-  simple?: string;
-  howToUse?: string;
-  combos?: string[];
-  role?: string;
-  related?: string[];
-}
 
 interface Props {
   cardId: string | null;
@@ -104,7 +97,7 @@ const CardDetailModal = ({ cardId, siblingIds = [], onChangeCardId, onClose }: P
     setAiError(null);
     try {
       const face = card.card_faces?.[0];
-      const payload = {
+      const result = await explainCard({
         name: card.name,
         type_line: card.type_line ?? face?.type_line,
         mana_cost: card.mana_cost ?? face?.mana_cost,
@@ -112,12 +105,9 @@ const CardDetailModal = ({ cardId, siblingIds = [], onChangeCardId, onClose }: P
         power: card.power ?? face?.power,
         toughness: card.toughness ?? face?.toughness,
         loyalty: card.loyalty ?? face?.loyalty,
-      };
-      const { data, error } = await supabase.functions.invoke("explain-card", { body: { card: payload } });
-      if (error) throw error;
-      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
-      aiCache.set(card.id, data as AIExplanation);
-      setAi(data as AIExplanation);
+      });
+      aiCache.set(card.id, result);
+      setAi(result);
     } catch (e) {
       setAiError((e as Error).message || "AI failed");
     } finally {
