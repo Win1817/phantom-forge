@@ -2,23 +2,26 @@
 // (free tier blocks outbound fetch to external domains)
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
-// Tries v1 first (works for both AI Studio and Google Cloud keys), falls back gracefully
+
+// Try models in order until one responds — handles keys with restricted model access
 const GEMINI_MODELS = [
   "gemini-2.0-flash",
   "gemini-2.0-flash-lite",
   "gemini-1.5-flash",
+  "gemini-1.5-flash-latest",
+  "gemini-pro",
 ];
 
 function geminiUrl(model: string) {
-  return `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+  return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 }
 
 async function callGemini(systemPrompt: string, userPrompt: string, maxTokens = 1024): Promise<string> {
   if (!GEMINI_API_KEY) throw new Error("Missing VITE_GEMINI_API_KEY in environment.");
 
+  // v1beta systemInstruction not supported on all key types — fold into user message
   const body = JSON.stringify({
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+    contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
     generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7 },
   });
 
@@ -46,7 +49,7 @@ async function callGemini(systemPrompt: string, userPrompt: string, maxTokens = 
   throw new Error(`No available Gemini model found. Last error: ${lastError}`);
 }
 
-// ── explain-card ────────────────────────────────────────────────────────────
+// ── explain-card ─────────────────────────────────────────────────────────────
 
 export interface CardPayload {
   name: string;
@@ -97,7 +100,7 @@ Return ONLY valid JSON with these keys:
   }
 }
 
-// ── generate-deck ────────────────────────────────────────────────────────────
+// ── generate-deck ─────────────────────────────────────────────────────────────
 
 export interface DeckParams {
   format: string;
