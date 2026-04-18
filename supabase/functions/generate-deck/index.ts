@@ -1,4 +1,4 @@
-// PhantomMTG - AI deck generation edge function (Anthropic Claude).
+// PhantomMTG - AI deck generation edge function (Google Gemini).
 // Returns: { name, description, strategy, deckList }
 
 const corsHeaders = {
@@ -12,9 +12,9 @@ Deno.serve(async (req) => {
   try {
     const { format, style, colors, budget, notes } = await req.json();
 
-    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!ANTHROPIC_API_KEY) {
-      return new Response(JSON.stringify({ error: "Missing ANTHROPIC_API_KEY. Add it in Supabase Dashboard > Project Settings > Edge Functions > Secrets." }), {
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      return new Response(JSON.stringify({ error: "Missing GEMINI_API_KEY." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -47,20 +47,20 @@ Return ONLY valid JSON with these exact keys (no markdown, no code fences):
   "deckList": "Deck\n4 Lightning Bolt (M11) 149\n..."
 }`;
 
-    const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 2048,
-        system: "You are a concise MTG deck building expert. Always reply with raw JSON only, no markdown, no code fences.",
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
+    const aiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: "You are a concise MTG deck building expert. Always reply with raw JSON only, no markdown, no code fences." }]
+          },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
+        }),
+      }
+    );
 
     if (aiRes.status === 429) {
       return new Response(JSON.stringify({ error: "Rate limited. Try again shortly." }), {
@@ -75,7 +75,7 @@ Return ONLY valid JSON with these exact keys (no markdown, no code fences):
     }
 
     const data = await aiRes.json();
-    let content: string = data.content?.[0]?.text ?? "{}";
+    let content: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
     content = content.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
 
     let parsed: Record<string, unknown> = {};

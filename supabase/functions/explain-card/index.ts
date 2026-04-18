@@ -1,4 +1,4 @@
-// PhantomMTG - AI card explanation edge function (Anthropic Claude).
+// PhantomMTG - AI card explanation edge function (Google Gemini).
 // Returns: { simple, howToUse, combos, role, related }
 
 const corsHeaders = {
@@ -18,9 +18,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!ANTHROPIC_API_KEY) {
-      return new Response(JSON.stringify({ error: "Missing ANTHROPIC_API_KEY. Add it in Supabase Dashboard > Project Settings > Edge Functions > Secrets." }), {
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      return new Response(JSON.stringify({ error: "Missing GEMINI_API_KEY." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -43,43 +43,35 @@ Return ONLY valid JSON with these keys:
   "related": ["card name", "card name", "card name"]
 }`;
 
-    const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 512,
-        system: "You are a concise MTG expert. Always reply with raw JSON only, no markdown.",
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
+    const aiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: "You are a concise MTG expert. Always reply with raw JSON only, no markdown." }]
+          },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 512, temperature: 0.5 },
+        }),
+      }
+    );
 
     if (aiRes.status === 429) {
       return new Response(JSON.stringify({ error: "Rate limited. Try again shortly." }), {
-        status: 429,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (aiRes.status === 402) {
-      return new Response(JSON.stringify({ error: "AI credits exhausted." }), {
-        status: 402,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     if (!aiRes.ok) {
       const t = await aiRes.text();
       return new Response(JSON.stringify({ error: `AI error: ${t}` }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const data = await aiRes.json();
-    let content: string = data.content?.[0]?.text ?? "{}";
+    let content: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
     content = content.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
 
     let parsed: Record<string, unknown> = {};
