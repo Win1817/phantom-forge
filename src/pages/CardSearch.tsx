@@ -4,9 +4,10 @@ import { Search as SearchIcon, Plus, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { searchCards, getCardImage, type ScryfallCard } from "@/lib/scryfall";
+import { searchCards, getCardImage, primeCardCache, type ScryfallCard } from "@/lib/scryfall";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import CardDetailModal from "@/components/CardDetailModal";
 
 const RARITY_CLASS: Record<string, string> = {
   common: "border-rarity-common/40 text-rarity-common",
@@ -23,6 +24,7 @@ const CardSearch = () => {
   const [results, setResults] = useState<ScryfallCard[]>([]);
   const [total, setTotal] = useState(0);
   const [adding, setAdding] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   useEffect(() => {
     if (initial) void runSearch(initial);
@@ -33,6 +35,7 @@ const CardSearch = () => {
     setBusy(true);
     try {
       const { data, total } = await searchCards(q);
+      data.forEach(primeCardCache);
       setResults(data);
       setTotal(total);
     } catch (e) {
@@ -115,13 +118,18 @@ const CardSearch = () => {
           const rarity = c.rarity ?? "common";
           return (
             <div key={c.id} className="group relative overflow-hidden rounded-xl border border-border bg-card p-3 card-hover">
-              <div className="aspect-[488/680] overflow-hidden rounded-md bg-secondary ring-1 ring-border">
+              <button
+                type="button"
+                onClick={() => setOpenId(c.id)}
+                className="block w-full aspect-[488/680] overflow-hidden rounded-md bg-secondary ring-1 ring-border focus:outline-none focus:ring-2 focus:ring-primary"
+                aria-label={`Open ${c.name} details`}
+              >
                 {img ? (
                   <img src={img} alt={c.name} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
                 ) : (
                   <div className="flex h-full items-center justify-center p-2 text-center text-xs text-muted-foreground">{c.name}</div>
                 )}
-              </div>
+              </button>
               <div className="mt-3 space-y-1.5">
                 <p className="line-clamp-1 font-fantasy text-sm font-semibold">{c.name}</p>
                 <div className="flex items-center justify-between gap-1">
@@ -144,6 +152,13 @@ const CardSearch = () => {
           );
         })}
       </div>
+
+      <CardDetailModal
+        cardId={openId}
+        siblingIds={results.map((r) => r.id)}
+        onChangeCardId={setOpenId}
+        onClose={() => setOpenId(null)}
+      />
     </div>
   );
 };

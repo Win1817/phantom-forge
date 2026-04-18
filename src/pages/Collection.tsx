@@ -8,9 +8,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import CardDetailModal from "@/components/CardDetailModal";
 
 interface CollectionCard {
   id: string;
+  scryfall_id: string;
   card_name: string;
   set_name: string | null;
   rarity: string | null;
@@ -32,6 +34,7 @@ const Collection = () => {
   const [cards, setCards] = useState<CollectionCard[]>([]);
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(true);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -43,7 +46,7 @@ const Collection = () => {
     setLoading(true);
     const { data } = await supabase
       .from("collection_cards")
-      .select("id, card_name, set_name, rarity, image_url, quantity, price_usd, foil")
+      .select("id, scryfall_id, card_name, set_name, rarity, image_url, quantity, price_usd, foil")
       .order("created_at", { ascending: false });
     setCards(data ?? []);
     setLoading(false);
@@ -106,13 +109,18 @@ const Collection = () => {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {filtered.map((c) => (
             <Card key={c.id} className="group overflow-hidden border-border bg-card card-hover">
-              <div className="aspect-[488/680] overflow-hidden bg-secondary">
+              <button
+                type="button"
+                onClick={() => setOpenId(c.scryfall_id)}
+                className="block w-full aspect-[488/680] overflow-hidden bg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+                aria-label={`Open ${c.card_name} details`}
+              >
                 {c.image_url ? (
                   <img src={c.image_url} alt={c.card_name} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
                 ) : (
                   <div className="flex h-full items-center justify-center p-2 text-center text-xs text-muted-foreground">{c.card_name}</div>
                 )}
-              </div>
+              </button>
               <CardContent className="space-y-2 p-3">
                 <p className="line-clamp-1 font-fantasy text-sm font-semibold">{c.card_name}</p>
                 <div className="flex items-center justify-between">
@@ -138,6 +146,13 @@ const Collection = () => {
           ))}
         </div>
       )}
+
+      <CardDetailModal
+        cardId={openId}
+        siblingIds={filtered.map((c) => c.scryfall_id)}
+        onChangeCardId={setOpenId}
+        onClose={() => setOpenId(null)}
+      />
     </div>
   );
 };
