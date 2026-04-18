@@ -2,7 +2,7 @@
 // (free tier blocks outbound fetch to external domains)
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
 
 async function callGemini(systemPrompt: string, userPrompt: string, maxTokens = 1024): Promise<string> {
   if (!GEMINI_API_KEY) throw new Error("Missing VITE_GEMINI_API_KEY in environment.");
