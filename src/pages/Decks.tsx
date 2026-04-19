@@ -116,24 +116,27 @@ export default function Decks() {
     setCopied(false);
   };
 
-  const copyExport = async () => {
-    try {
-      await navigator.clipboard.writeText(exportText);
+  const exportTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const copyExport = () => {
+    const el = exportTextareaRef.current;
+    if (!el) return;
+    // Remove readOnly temporarily so mobile can select
+    el.removeAttribute("readonly");
+    el.focus();
+    el.select();
+    el.setSelectionRange(0, el.value.length); // iOS
+    const ok = document.execCommand("copy");
+    el.setAttribute("readonly", "true");
+    if (ok) {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback for mobile browsers that block clipboard API
-      const el = document.createElement("textarea");
-      el.value = exportText;
-      el.style.position = "fixed";
-      el.style.opacity = "0";
-      document.body.appendChild(el);
-      el.focus();
-      el.select();
-      document.execCommand("copy");
-      document.body.removeChild(el);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), 2500);
+    } else {
+      // Last resort: modern clipboard API
+      navigator.clipboard?.writeText(exportText).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      }).catch(() => toast.error("Copy failed — please select and copy manually"));
     }
   };
 
@@ -402,6 +405,7 @@ export default function Decks() {
 
           <div className="space-y-4 pt-2">
             <Textarea
+              ref={exportTextareaRef}
               value={exportText}
               readOnly
               className="min-h-[260px] font-mono text-xs bg-secondary/40 border-border/60 resize-none"

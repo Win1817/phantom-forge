@@ -111,24 +111,26 @@ export default function Decksmith() {
     }
   };
 
-  const copyExport = async () => {
+  const exportTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const copyExport = () => {
     if (!generated) return;
-    try {
-      await navigator.clipboard.writeText(generated.deckList);
+    const el = exportTextareaRef.current;
+    if (!el) return;
+    el.removeAttribute("readonly");
+    el.focus();
+    el.select();
+    el.setSelectionRange(0, el.value.length);
+    const ok = document.execCommand("copy");
+    el.setAttribute("readonly", "true");
+    if (ok) {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      const el = document.createElement("textarea");
-      el.value = generated.deckList;
-      el.style.position = "fixed";
-      el.style.opacity = "0";
-      document.body.appendChild(el);
-      el.focus();
-      el.select();
-      document.execCommand("copy");
-      document.body.removeChild(el);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), 2500);
+    } else {
+      navigator.clipboard?.writeText(generated.deckList).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      }).catch(() => toast.error("Copy failed — please select and copy manually"));
     }
   };
 
@@ -412,7 +414,7 @@ export default function Decksmith() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            <Textarea value={generated?.deckList ?? ""} readOnly
+            <Textarea ref={exportTextareaRef} value={generated?.deckList ?? ""} readOnly
               className="min-h-[260px] font-mono text-xs bg-secondary/40 border-border/60 resize-none" />
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={downloadExport} className="border-border/60">
