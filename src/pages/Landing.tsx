@@ -286,7 +286,7 @@ const Landing = () => {
         }} />
 
         {/* ── Arcane rune rings ── */}
-        <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 700, height: 700, pointerEvents: "none" }}>
+        <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(700px, 90vw)", height: "min(700px, 90vw)", pointerEvents: "none" }}>
           {/* Outer ring */}
           <div style={{
             position: "absolute", inset: 0, borderRadius: "50%",
@@ -299,13 +299,13 @@ const Landing = () => {
                 width: 6, height: 6, marginTop: -3, marginLeft: -3,
                 borderRadius: "50%",
                 background: "hsl(42 78% 60%/0.4)",
-                transform: `rotate(${deg}deg) translateX(350px)`,
+                transform: `rotate(${deg}deg) translateX(min(350px, 44vw))`,
               }} />
             ))}
           </div>
           {/* Middle ring */}
           <div style={{
-            position: "absolute", inset: 60, borderRadius: "50%",
+            position: "absolute", inset: "8%", borderRadius: "50%",
             border: "1px solid hsl(270 60% 50%/0.1)",
             animation: "rune-spin-rev 40s linear infinite",
           }}>
@@ -315,13 +315,13 @@ const Landing = () => {
                 width: 4, height: 4, marginTop: -2, marginLeft: -2,
                 borderRadius: "50%",
                 background: "hsl(270 60% 60%/0.5)",
-                transform: `rotate(${deg}deg) translateX(290px)`,
+                transform: `rotate(${deg}deg) translateX(min(290px, 36vw))`,
               }} />
             ))}
           </div>
           {/* Inner ring */}
           <div style={{
-            position: "absolute", inset: 130, borderRadius: "50%",
+            position: "absolute", inset: "18%", borderRadius: "50%",
             border: "1px solid hsl(42 78% 50%/0.12)",
             animation: "rune-spin 25s linear infinite",
           }} />
@@ -329,14 +329,14 @@ const Landing = () => {
 
         {/* ── Orbiting mana dots ── */}
         <div style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0, pointerEvents: "none" }}>
-          <OrbitDot color="hsl(48 90% 80%)"  radius={260} duration={14} delay={0}   size={10} />
-          <OrbitDot color="hsl(210 90% 65%)" radius={260} duration={14} delay={2.8} size={10} />
-          <OrbitDot color="hsl(270 45% 65%)" radius={260} duration={14} delay={5.6} size={10} />
-          <OrbitDot color="hsl(8 85% 62%)"   radius={260} duration={14} delay={8.4} size={10} />
-          <OrbitDot color="hsl(135 55% 52%)" radius={260} duration={14} delay={11.2} size={10}/>
+          <OrbitDot color="hsl(48 90% 80%)"  radius={180} duration={14} delay={0}   size={10} />
+          <OrbitDot color="hsl(210 90% 65%)" radius={180} duration={14} delay={2.8} size={10} />
+          <OrbitDot color="hsl(270 45% 65%)" radius={180} duration={14} delay={5.6} size={10} />
+          <OrbitDot color="hsl(8 85% 62%)"   radius={180} duration={14} delay={8.4} size={10} />
+          <OrbitDot color="hsl(135 55% 52%)" radius={180} duration={14} delay={11.2} size={10}/>
           {/* Inner orbit */}
-          <OrbitDot color="hsl(42 78% 60%)"  radius={160} duration={9}  delay={0}   size={6} />
-          <OrbitDot color="hsl(270 60% 55%)" radius={160} duration={9}  delay={4.5} size={6} />
+          <OrbitDot color="hsl(42 78% 60%)"  radius={110} duration={9}  delay={0}   size={6} />
+          <OrbitDot color="hsl(270 60% 55%)" radius={110} duration={9}  delay={4.5} size={6} />
         </div>
 
         {/* ── Floating particles ── */}
@@ -348,7 +348,7 @@ const Landing = () => {
         <div style={{
           position: "absolute", top: "50%", left: "50%",
           transform: "translate(-50%,-50%)",
-          width: 400, height: 400, borderRadius: "50%",
+          width: "min(400px, 80vw)", height: "min(400px, 80vw)", borderRadius: "50%",
           background: "radial-gradient(circle, hsl(42 78% 50%/0.1) 0%, hsl(270 60% 40%/0.05) 50%, transparent 70%)",
           animation: "arcane-ring 4s ease-in-out infinite",
           pointerEvents: "none",
@@ -394,7 +394,7 @@ const Landing = () => {
             {/* Headline */}
             <h1 style={{
               fontFamily: "Cinzel, serif",
-              fontSize: "clamp(2.2rem, 8vw, 5.5rem)",
+              fontSize: "clamp(1.9rem, 9vw, 5.5rem)",
               fontWeight: 800, lineHeight: 1.05,
               marginBottom: 12,
               animation: "hero-in 0.8s ease-out 0.15s both",
@@ -425,7 +425,7 @@ const Landing = () => {
               <span style={{
                 display: "block",
                 color: "hsl(40 30% 92%)",
-                fontSize: "clamp(1.6rem, 6vw, 4rem)",
+                fontSize: "clamp(1.3rem, 7vw, 4rem)",
                 fontWeight: 600, marginTop: 8,
                 opacity: 0.9,
               }}>
