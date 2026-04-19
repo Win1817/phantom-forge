@@ -93,44 +93,51 @@ const STYLE_SLOT_BIAS: Record<string, Partial<Record<string, number>>> = {
 const BASE_SLOTS: Slot[] = [
   {
     name: "ramp",
-    countCdr: 10, count60: 4,
+    countCdr: 12, count60: 4,
     oracleQuery: `(o:"add {" OR o:"search your library for a basic land" OR o:"put a land" OR o:"land card onto the battlefield")`,
     typeQuery: `-t:land`,
     sortBy: "edhrec",
   },
   {
     name: "draw",
-    countCdr: 8, count60: 4,
+    countCdr: 10, count60: 4,
     oracleQuery: `(o:"draw a card" OR o:"draw two" OR o:"draw three" OR o:"draw cards" OR o:"draw X")`,
     typeQuery: `-t:land`,
     sortBy: "edhrec",
   },
   {
     name: "removal",
-    countCdr: 8, count60: 4,
+    countCdr: 10, count60: 4,
     oracleQuery: `(o:"destroy target creature" OR o:"exile target creature" OR o:"destroy target permanent" OR o:"exile target permanent" OR o:"deals damage to any target")`,
     typeQuery: `-t:land`,
     sortBy: "edhrec",
   },
   {
     name: "counter",
-    countCdr: 4, count60: 2,
+    countCdr: 5, count60: 2,
     oracleQuery: `o:"counter target spell"`,
     typeQuery: `t:instant`,
     sortBy: "edhrec",
   },
   {
     name: "threats",
-    countCdr: 12, count60: 12,
+    countCdr: 20, count60: 12,
     oracleQuery: `(o:"flying" OR o:"trample" OR o:"haste") pow>=3`,
     typeQuery: `t:creature`,
     sortBy: "edhrec",
   },
   {
     name: "support",
-    countCdr: 8, count60: 4,
+    countCdr: 5, count60: 4,
     oracleQuery: `(o:"+1/+1 counter" OR o:"hexproof" OR o:"indestructible" OR o:"whenever you gain life")`,
     typeQuery: `-t:land -t:basic`,
+    sortBy: "edhrec",
+  },
+  {
+    name: "utility",
+    countCdr: 0, count60: 0,
+    oracleQuery: `(t:enchantment OR t:artifact) -t:land`,
+    typeQuery: `-t:creature`,
     sortBy: "edhrec",
   },
 ];
@@ -316,14 +323,42 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
     slotSummary[slot.name] = filled;
   }
 
-  // ── 4. Add lands ──
+  // ── 4. Pad to fill any gaps (Scryfall may return fewer results than slot target) ──
+  let nonLandTotal = selectedCards.reduce((s, c) => s + c.quantity, 0);
+  const targetNonLand = config.deckSize - config.landCount;
+  if (nonLandTotal < targetNonLand) {
+    const gap = targetNonLand - nonLandTotal;
+    const colorFilter = colorId ? `ci<=${colorId}` : "";
+    const formatFilter = config.scryfallKey ? `f:${config.scryfallKey}` : "";
+    const padQ = [
+      `t:creature pow>=2`,
+      colorFilter,
+      formatFilter,
+      config.isCommander ? "" : `usd<=5`,
+      "order:edhrec",
+    ].filter(Boolean).join(" ");
+
+    const padResults = await scryfallSearch(padQ);
+    let padded = 0;
+    for (const card of padResults) {
+      if (padded >= gap) break;
+      if (usedNames.has(card.name)) continue;
+      if (priceOf(card) > priceCap) continue;
+      selectedCards.push({ ...card, quantity: 1 });
+      usedNames.add(card.name);
+      padded++;
+    }
+    slotSummary["threats"] = (slotSummary["threats"] ?? 0) + padded;
+  }
+
+  // ── 5. Add lands ──
   const nonLandCount = selectedCards.reduce((s, c) => s + c.quantity, 0);
   const landTarget = config.deckSize - nonLandCount;
   const lands = buildLands(params.colors, Math.max(landTarget, config.landCount), params.budget, priceCap);
   selectedCards.push(...lands);
   slotSummary["lands"] = lands.reduce((s, c) => s + c.quantity, 0);
 
-  // ── 5. Trim to exact deck size ──
+  // ── 6. Trim to exact deck size ──
   let total = selectedCards.reduce((s, c) => s + c.quantity, 0);
   let i = selectedCards.length - 1;
   while (total > config.deckSize && i >= 0) {
@@ -336,7 +371,7 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
     i--;
   }
 
-  // ── 6. Render Arena/MTGO export ──
+  // ── 7. Render Arena/MTGO export ──
   const lines: string[] = [];
 
   if (commanderCard && config.isCommander) {
