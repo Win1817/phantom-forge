@@ -14,6 +14,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { parseDeckText, exportDeckText, resolveCard } from "@/lib/deckImportExport";
@@ -59,6 +60,8 @@ export default function Decks() {
   const [exportText, setExportText] = useState("");
   const [exportDeckName, setExportDeckName] = useState("");
   const [copied, setCopied] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => { if (user) load(); }, [user]);
 
@@ -85,12 +88,19 @@ export default function Decks() {
     setLoading(false);
   };
 
-  const deleteDeck = async (id: string, name: string) => {
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  const requestDelete = (id: string, name: string) => {
+    setPendingDelete({ id, name });
+    setConfirmOpen(true);
+  };
+
+  const deleteDeck = async () => {
+    if (!pendingDelete) return;
+    const { id, name } = pendingDelete;
     await supabase.from("deck_cards").delete().eq("deck_id", id);
     await supabase.from("decks").delete().eq("id", id);
     setDecks((prev) => prev.filter((d) => d.id !== id));
     toast.success(`"${name}" deleted`);
+    setPendingDelete(null);
   };
 
   const openExport = async (deck: Deck) => {
@@ -352,6 +362,16 @@ export default function Decks() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirm Dialog */}
+      <ConfirmDialog
+        open={confirmOpen}
+        title={`Delete "${pendingDelete?.name}"?`}
+        description="This will permanently remove the deck and all its cards. This cannot be undone."
+        confirmLabel="Delete deck"
+        onConfirm={deleteDeck}
+        onCancel={() => { setConfirmOpen(false); setPendingDelete(null); }}
+      />
 
       {/* Export Dialog */}
       <Dialog open={exportOpen} onOpenChange={setExportOpen}>

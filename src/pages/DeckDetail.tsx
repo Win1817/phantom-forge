@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import CardDetailModal from "@/components/CardDetailModal";
@@ -83,6 +84,7 @@ export default function DeckDetail() {
   const [deck, setDeck] = useState<Deck | null>(null);
   const [cards, setCards] = useState<DeckCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [view, setView] = useState<"grid" | "list">("grid");
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -122,7 +124,7 @@ export default function DeckDetail() {
   };
 
   const handleDelete = async () => {
-    if (!deck || !confirm(`Delete "${deck.name}"? This cannot be undone.`)) return;
+    if (!deck) return;
     await supabase.from("deck_cards").delete().eq("deck_id", deck.id);
     await supabase.from("decks").delete().eq("id", deck.id);
     toast.success(`"${deck.name}" deleted`);
@@ -254,7 +256,7 @@ export default function DeckDetail() {
             <Button size="sm" variant={view === "list" ? "secondary" : "ghost"} className="rounded-none h-8 px-2.5 border-l border-border/60" onClick={() => setView("list")}><List className="h-3.5 w-3.5" /></Button>
           </div>
           <Button variant="outline" size="sm" className="border-border/60 h-8" onClick={handleExport}><Download className="mr-1.5 h-3.5 w-3.5" /> Export</Button>
-          <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-destructive" onClick={handleDelete}><Trash2 className="h-3.5 w-3.5" /></Button>
+          <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-destructive" onClick={() => setDeleteConfirmOpen(true)}><Trash2 className="h-3.5 w-3.5" /></Button>
         </div>
       </div>
 
@@ -351,6 +353,15 @@ export default function DeckDetail() {
       ) : (
         <ListView groups={mainGroups} sideboard={sideboard} onCardClick={setOpenId} ownedIds={ownedIds} onQtyChange={updateQty} onRemove={removeCard} />
       )}
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        title={`Delete "${deck?.name}"?`}
+        description="This will permanently remove the deck and all its cards. This cannot be undone."
+        confirmLabel="Delete deck"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
 
       <CardDetailModal cardId={openId} siblingIds={allScryfallIds} onChangeCardId={setOpenId} onClose={() => setOpenId(null)} />
     </div>
