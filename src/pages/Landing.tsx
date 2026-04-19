@@ -356,9 +356,9 @@ const Landing = () => {
 
         {/* ── Layout: cards + content ── */}
         <div style={{
-          position: "relative", zIndex: 10, width: "100%",
+          position: "relative", zIndex: 10, width: "100%", boxSizing: "border-box",
           display: "flex", alignItems: "center", justifyContent: "center",
-          gap: 40, padding: "80px 24px",
+          gap: 40, padding: "80px 20px",
         }}>
 
           {/* Left card — hidden on mobile */}
@@ -373,7 +373,7 @@ const Landing = () => {
           </div>
 
           {/* Center content */}
-          <div style={{ maxWidth: 680, width: "100%", textAlign: "center", flexShrink: 0, padding: "0 20px" }}>
+          <div style={{ maxWidth: 680, width: "100%", minWidth: 0, textAlign: "center", flexShrink: 1, padding: "0" }}>
 
             {/* Badge */}
             <div style={{
@@ -448,9 +448,10 @@ const Landing = () => {
 
             {/* Subtext */}
             <p style={{
-              fontSize: "clamp(0.95rem, 2vw, 1.15rem)",
+              fontSize: "clamp(0.9rem, 3.5vw, 1.15rem)",
               color: "hsl(240 8% 62%)", lineHeight: 1.7,
               maxWidth: 520, margin: "0 auto 36px",
+              padding: "0 4px",
               animation: "hero-in 0.8s ease-out 0.3s both",
             }}>
               The premium inventory & deck-building forge for serious Planeswalkers.
@@ -460,12 +461,14 @@ const Landing = () => {
 
             {/* CTAs */}
             <div style={{
-              display: "flex", flexWrap: "wrap", gap: 12,
-              justifyContent: "center", marginBottom: 48,
+              display: "flex", flexDirection: "column", gap: 12,
+              alignItems: "stretch", marginBottom: 48,
               animation: "hero-in 0.8s ease-out 0.45s both",
-            }}>
+            }}
+              className="sm:flex-row sm:flex-wrap sm:justify-center"
+            >
               <Button asChild size="lg" style={{
-                height: 52, padding: "0 32px", fontSize: 15,
+                height: 52, fontSize: 15,
                 background: "linear-gradient(135deg, hsl(42 78% 55%), hsl(42 95% 68%))",
                 color: "hsl(240 20% 8%)",
                 boxShadow: "0 0 30px hsl(42 78% 50%/0.35), 0 4px 20px hsl(240 30% 0%/0.4)",
@@ -479,7 +482,7 @@ const Landing = () => {
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline" style={{
-                height: 52, padding: "0 32px", fontSize: 15,
+                height: 52, fontSize: 15,
                 border: "1px solid hsl(42 78% 50%/0.3)",
                 color: "hsl(40 30% 85%)",
                 background: "hsl(240 14% 8%/0.6)",
