@@ -80,26 +80,31 @@ export function AppLayout() {
 
       {/* Mobile bottom nav */}
       <nav className="fixed bottom-0 inset-x-0 z-40 flex md:hidden border-t border-border/80 bg-background/95 backdrop-blur-xl">
-        {mobileNav.map((item) => {
-          const active = isActive(item.url);
-          return (
-            <NavLink
-              key={item.url}
-              to={item.url}
-              end={item.url === "/app"}
-              className="relative flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors"
-            >
-              <span className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-lg transition-all",
-                active ? "bg-primary/15 text-primary shadow-[0_0_12px_hsl(42_78%_60%_/0.3)]" : "text-muted-foreground"
-              )}>
-                <item.icon className="h-[18px] w-[18px]" />
-              </span>
-              <span className={cn(active ? "text-primary" : "text-muted-foreground/70")}>{item.title}</span>
-              {active && <span className="absolute top-0 h-[2px] w-8 rounded-b-full bg-primary shadow-[0_0_8px_hsl(42_78%_60%_/0.6)]" />}
-            </NavLink>
-          );
-        })}
+        {mobileNav.map((item) => (
+          <NavLink
+            key={item.url}
+            to={item.url}
+            end
+            className={({ isActive }) => cn(
+              "relative flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
+              isActive ? "text-primary" : "text-muted-foreground/70"
+            )}
+          >
+            {({ isActive }) => (
+              <>
+                <span className={cn(
+                  "flex h-7 w-7 items-center justify-center rounded-lg transition-all",
+                  isActive ? "bg-primary/15 text-primary shadow-[0_0_12px_hsl(42_78%_60%_/0.3)]" : "text-muted-foreground"
+                )}>
+                  <item.icon className="h-[18px] w-[18px]" />
+                </span>
+                <span>{item.title}</span>
+                {isActive && <span className="absolute top-0 h-[2px] w-8 rounded-b-full bg-primary shadow-[0_0_8px_hsl(42_78%_60%_/0.6)]" />}
+              </>
+            )}
+          </NavLink>
+        ))}
+      </nav>
       </nav>
 
       {/* Keyboard shortcut help overlay */}

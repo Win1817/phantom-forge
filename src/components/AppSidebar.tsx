@@ -46,20 +46,24 @@ export function AppSidebar() {
         <RouterNavLink
           to={item.url}
           end={item.url === "/app"}
-          className={({ isActive: a }) =>
+          className={({ isActive }) =>
             cn(
               "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-all",
-              a || isActive(item.url)
+              isActive
                 ? "bg-sidebar-accent text-primary font-semibold"
                 : "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-primary",
             )
           }
         >
-          {(isActive(item.url)) && (
-            <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r bg-primary shadow-[0_0_8px_hsl(var(--primary))]" />
+          {({ isActive }) => (
+            <>
+              {isActive && (
+                <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r bg-primary shadow-[0_0_8px_hsl(var(--primary))]" />
+              )}
+              <item.icon className="h-4 w-4 shrink-0" />
+              {!collapsed && <span>{item.title}</span>}
+            </>
           )}
-          <item.icon className="h-4 w-4 shrink-0" />
-          {!collapsed && <span>{item.title}</span>}
         </RouterNavLink>
       </SidebarMenuButton>
     </SidebarMenuItem>

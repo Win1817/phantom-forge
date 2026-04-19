@@ -246,7 +246,7 @@ const Landing = () => {
       {/* ══════════════════════════════════════════════════════
           HERO SECTION
          ══════════════════════════════════════════════════════ */}
-      <section style={{ position: "relative", minHeight: "100svh", display: "flex", alignItems: "center", overflow: "hidden" }}>
+      <section style={{ position: "relative", minHeight: "100svh", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", width: "100%" }}>
 
         {/* ── Deep background ── */}
         <div style={{
@@ -373,7 +373,7 @@ const Landing = () => {
           </div>
 
           {/* Center content */}
-          <div style={{ maxWidth: 680, textAlign: "center", flexShrink: 0 }}>
+          <div style={{ maxWidth: 680, width: "100%", textAlign: "center", flexShrink: 0, padding: "0 20px" }}>
 
             {/* Badge */}
             <div style={{
@@ -394,7 +394,7 @@ const Landing = () => {
             {/* Headline */}
             <h1 style={{
               fontFamily: "Cinzel, serif",
-              fontSize: "clamp(2.8rem, 6vw, 5.5rem)",
+              fontSize: "clamp(2.2rem, 8vw, 5.5rem)",
               fontWeight: 800, lineHeight: 1.05,
               marginBottom: 12,
               animation: "hero-in 0.8s ease-out 0.15s both",
@@ -425,7 +425,7 @@ const Landing = () => {
               <span style={{
                 display: "block",
                 color: "hsl(40 30% 92%)",
-                fontSize: "clamp(2rem, 4.5vw, 4rem)",
+                fontSize: "clamp(1.6rem, 6vw, 4rem)",
                 fontWeight: 600, marginTop: 8,
                 opacity: 0.9,
               }}>
