@@ -37,9 +37,11 @@ export async function buildDeck(
   format: string,
   style: string,
   colors: string[],
-  budget: string
+  budget: string,
+  collectionCards?: import("./deckBuilder").CollectionCard[],
+  useCollection?: boolean,
 ): Promise<BuiltDeck> {
-  const result = await buildDeckMath({ format, style, colors, budget });
+  const result = await buildDeckMath({ format, style, colors, budget, collectionCards, useCollection });
   return {
     deckList: result.deckList,
     cardCount: result.cards.reduce((sum, c) => sum + c.quantity, 0),

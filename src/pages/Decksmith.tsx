@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Sparkles, Download, Copy, Check, Loader2, Wand2, Zap } from "lucide-react";
+import { Sparkles, Download, Copy, Check, Loader2, Wand2, Zap, Library, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { supabase } from "@/integrations/supabase/client";
 import { generateDeckNarrative, type DeckNarrative } from "@/lib/gemini";
 import { buildDeck, type BuiltDeck } from "@/lib/mtgmath";
+import type { CollectionCard } from "@/lib/deckBuilder";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { parseDeckText } from "@/lib/deckImportExport";
@@ -57,6 +58,10 @@ export default function Decksmith() {
   const [lastGenerated, setLastGenerated] = useState<number>(0);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const COOLDOWN_MS = 10_000;
+  const [useCollection, setUseCollection]   = useState(false);
+  const [collection, setCollection]         = useState<CollectionCard[]>([]);
+  const [collectionLoaded, setCollectionLoaded] = useState(false);
+  const [collectionCount, setCollectionCount]   = useState(0);
 
   useEffect(() => {
     if (lastGenerated === 0) return;
@@ -68,6 +73,22 @@ export default function Decksmith() {
     const interval = setInterval(tick, 500);
     return () => clearInterval(interval);
   }, [lastGenerated]);
+
+  // Load collection when toggle is turned on
+  useEffect(() => {
+    if (!useCollection || collectionLoaded || !user) return;
+    (async () => {
+      const { data } = await supabase
+        .from("collection_cards")
+        .select("scryfall_id, card_name, set_code, collector_number, mana_cost, type_line, colors, cmc, quantity")
+        .order("card_name");
+      if (data) {
+        setCollection(data as CollectionCard[]);
+        setCollectionCount(data.length);
+        setCollectionLoaded(true);
+      }
+    })();
+  }, [useCollection, collectionLoaded, user]);
 
   const toggleColor = (c: string) =>
     setSelectedColors((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]);
@@ -85,7 +106,7 @@ export default function Decksmith() {
     try {
       // Step 1 — Math: build real deck from Scryfall data
       setBuildProgress(20);
-      const built: BuiltDeck = await buildDeck(format, style, selectedColors, budget);
+      const built: BuiltDeck = await buildDeck(format, style, selectedColors, budget, useCollection ? collection : undefined, useCollection);
       setBuildProgress(75);
 
       // Step 2 — AI: generate name + narrative only
@@ -273,6 +294,47 @@ export default function Decksmith() {
             </div>
           </div>
 
+          {/* ── Collection toggle ── */}
+          <div
+            onClick={() => setUseCollection(v => !v)}
+            className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-all ${
+              useCollection
+                ? "border-primary/50 bg-primary/8 ring-1 ring-primary/20"
+                : "border-border/50 bg-secondary/20 hover:border-border"
+            }`}
+          >
+            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${
+              useCollection ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground"
+            }`}>
+              <Library className="h-4 w-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm font-medium ${useCollection ? "text-foreground" : "text-muted-foreground"}`}>
+                Forge from my collection
+              </p>
+              <p className="text-[11px] text-muted-foreground/70 leading-tight">
+                {useCollection && collectionLoaded
+                  ? `Prioritising ${collectionCount} cards you own — fills gaps from Scryfall`
+                  : "Prioritise cards you already own before pulling from Scryfall"}
+              </p>
+            </div>
+            {/* Toggle pill */}
+            <div className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+              useCollection ? "bg-primary" : "bg-secondary-foreground/20"
+            }`}>
+              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                useCollection ? "translate-x-4" : "translate-x-0.5"
+              }`} />
+            </div>
+          </div>
+
+          {useCollection && collectionLoaded && collectionCount === 0 && (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-400">
+              <BookOpen className="h-4 w-4 shrink-0" />
+              Your collection is empty — head to Collection to add cards first.
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label className="text-xs uppercase tracking-wider text-muted-foreground">
               Additional notes <span className="normal-case tracking-normal text-muted-foreground/60">(optional)</span>
@@ -309,6 +371,7 @@ export default function Decksmith() {
           {/* How it works callout */}
           <div className="rounded-lg border border-border/40 bg-secondary/20 p-3 text-xs text-muted-foreground space-y-1">
             <p className="font-medium text-foreground text-[11px] uppercase tracking-wider">How it works</p>
+            {useCollection && <p><Library className="inline h-3 w-3 text-primary mr-1" />Your owned cards are prioritised first per slot</p>}
             <p><Zap className="inline h-3 w-3 text-primary mr-1" />Math engine pulls real Scryfall cards by role + mana curve</p>
             <p><Sparkles className="inline h-3 w-3 text-primary mr-1" />AI writes the deck name, description & strategy only</p>
             <p>No hallucinated cards. No invalid set codes.</p>
@@ -356,6 +419,11 @@ export default function Decksmith() {
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">{format}</Badge>
                     <Badge variant="outline" className="border-border text-muted-foreground text-[10px]">{generated.cardCount} cards</Badge>
+                    {useCollection && collectionCount > 0 && (
+                      <Badge variant="outline" className="border-mana-green/40 text-mana-green text-[10px]">
+                        <Library className="mr-1 h-2.5 w-2.5" /> From collection
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </CardHeader>

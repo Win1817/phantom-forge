@@ -25,6 +25,22 @@ export interface DeckBuilderParams {
   colors: string[];      // WUBRG subset
   budget: string;        // "budget" | "mid" | "competitive" | "any"
   notes?: string;
+  /** Optional: user's collection cards to prioritize in deck building */
+  collectionCards?: CollectionCard[];
+  useCollection?: boolean;
+}
+
+export interface CollectionCard {
+  scryfall_id: string;
+  card_name: string;
+  set_code: string | null;
+  collector_number: string | null;
+  mana_cost: string | null;
+  type_line: string | null;
+  colors: string[] | null;
+  cmc: number | null;
+  quantity: number;
+  oracle_text?: string;
 }
 
 export interface BuiltDeck {
@@ -269,6 +285,33 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
   const usedNames = new Set<string>();
   const slotSummary: Record<string, number> = {};
 
+  // ── 0. Pre-process collection cards into a lookup map ──
+  const collectionMap = new Map<string, CollectionCard>();
+  if (params.useCollection && params.collectionCards?.length) {
+    for (const c of params.collectionCards) {
+      collectionMap.set(c.card_name.toLowerCase(), c);
+    }
+  }
+
+  /** Try to match a collection card to a slot's oracle query keywords */
+  function matchesSlotOracle(card: CollectionCard, oracleQuery: string): boolean {
+    if (!card.oracle_text && !card.type_line) return false;
+    const text = `${card.oracle_text ?? ""} ${card.type_line ?? ""}`.toLowerCase();
+    // Extract quoted phrases from the oracle query and check if card text contains them
+    const phrases = [...oracleQuery.matchAll(/o:"([^"]+)"/g)].map(m => m[1].toLowerCase());
+    const typeTerms = [...oracleQuery.matchAll(/t:(\w+)/g)].map(m => m[1].toLowerCase());
+    const hasPhraseMatch = phrases.length === 0 || phrases.some(p => text.includes(p));
+    const hasTypeMatch = typeTerms.length === 0 || typeTerms.some(t => text.includes(t));
+    return hasPhraseMatch && hasTypeMatch;
+  }
+
+  function colorMatches(card: CollectionCard): boolean {
+    if (!colorId || params.colors.length === 0) return true;
+    const cardColors = card.colors ?? [];
+    if (cardColors.length === 0) return true; // colorless cards are always ok
+    return cardColors.every(c => colorId.includes(c));
+  }
+
   // ── 1. Pick commander (Commander format only) ──
   let commanderCard: (ScryfallCard & { quantity: number }) | null = null;
   if (config.isCommander) {
@@ -288,38 +331,72 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
     count60: Math.max(0, slot.count60 + Math.floor((bias[slot.name] ?? 0) / 2)),
   }));
 
-  // ── 3. Fill each role slot from Scryfall ──
+  // ── 3. Fill each role slot — collection first, then Scryfall ──
   for (const slot of slots) {
     const target = config.isCommander ? slot.countCdr : slot.count60;
     if (target <= 0) continue;
 
-    const colorFilter = colorId ? `ci<=${colorId}` : "";
-    const formatFilter = config.scryfallKey ? `f:${config.scryfallKey}` : "";
-    const budgetFilter = priceCap < 100 ? `usd<=${priceCap}` : "";
-    const typeFilter = slot.typeQuery ?? "";
-
-    const q = [
-      slot.oracleQuery,
-      colorFilter,
-      formatFilter,
-      budgetFilter,
-      typeFilter,
-      "order:edhrec",
-    ].filter(Boolean).join(" ");
-
-    const results = await scryfallSearch(q);
-
     let filled = 0;
-    for (const card of results) {
-      if (filled >= target) break;
-      if (usedNames.has(card.name)) continue;
-      if (priceOf(card) > priceCap) continue;
 
-      const qty = config.isCommander ? 1 : Math.min(config.maxCopies, target - filled);
-      selectedCards.push({ ...card, quantity: qty });
-      usedNames.add(card.name);
-      filled += qty;
+    // ── 3a. Try collection cards first ──
+    if (collectionMap.size > 0) {
+      for (const [, colCard] of collectionMap) {
+        if (filled >= target) break;
+        if (usedNames.has(colCard.card_name)) continue;
+        if (!colorMatches(colCard)) continue;
+        if (!matchesSlotOracle(colCard, slot.oracleQuery)) continue;
+
+        const availableQty = colCard.quantity;
+        const qty = config.isCommander ? 1 : Math.min(config.maxCopies, target - filled, availableQty);
+        selectedCards.push({
+          id: colCard.scryfall_id,
+          name: colCard.card_name,
+          set: colCard.set_code ?? "UNK",
+          collector_number: colCard.collector_number ?? "0",
+          type_line: colCard.type_line ?? "",
+          mana_cost: colCard.mana_cost ?? "",
+          cmc: colCard.cmc ?? 0,
+          colors: colCard.colors ?? [],
+          quantity: qty,
+          // Mark as from collection for display
+          _fromCollection: true,
+        } as ScryfallCard & { quantity: number; _fromCollection?: boolean });
+        usedNames.add(colCard.card_name);
+        filled += qty;
+      }
     }
+
+    // ── 3b. Fill remaining slots from Scryfall ──
+    const remaining = target - filled;
+    if (remaining > 0) {
+      const colorFilter = colorId ? `ci<=${colorId}` : "";
+      const formatFilter = config.scryfallKey ? `f:${config.scryfallKey}` : "";
+      const budgetFilter = priceCap < 100 ? `usd<=${priceCap}` : "";
+      const typeFilter = slot.typeQuery ?? "";
+
+      const q = [
+        slot.oracleQuery,
+        colorFilter,
+        formatFilter,
+        budgetFilter,
+        typeFilter,
+        "order:edhrec",
+      ].filter(Boolean).join(" ");
+
+      const results = await scryfallSearch(q);
+
+      for (const card of results) {
+        if (filled >= target) break;
+        if (usedNames.has(card.name)) continue;
+        if (priceOf(card) > priceCap) continue;
+
+        const qty = config.isCommander ? 1 : Math.min(config.maxCopies, target - filled);
+        selectedCards.push({ ...card, quantity: qty });
+        usedNames.add(card.name);
+        filled += qty;
+      }
+    }
+
     slotSummary[slot.name] = filled;
   }
 
