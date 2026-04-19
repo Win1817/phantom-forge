@@ -37,7 +37,8 @@ export function AppLayout() {
     if (query.trim()) navigate(`/app/search?q=${encodeURIComponent(query.trim())}`);
   };
 
-  const initial = user?.email?.[0]?.toUpperCase() ?? "P";
+  const initial    = (user?.user_metadata?.display_name || user?.email || "P")[0].toUpperCase();
+  const avatarUrl  = user?.user_metadata?.avatar_url ?? null;
   const isActive = (url: string) => {
     if (url === "/app") return location.pathname === "/app";
     // Exact match OR child route (e.g. /app/decks/123) but NOT sibling prefix collision
@@ -69,9 +70,16 @@ export function AppLayout() {
             </form>
 
             <div className="ml-auto flex items-center gap-2 shrink-0">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-arcane font-fantasy text-sm font-bold text-primary ring-1 ring-primary/30">
-                {initial}
-              </div>
+              <button
+                onClick={() => navigate("/app/settings")}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-arcane font-fantasy text-sm font-bold text-primary ring-1 ring-primary/30 overflow-hidden hover:ring-primary/60 transition-all"
+                title="Profile settings"
+              >
+                {avatarUrl
+                  ? <img src={avatarUrl} alt="avatar" className="h-full w-full object-cover" />
+                  : initial
+                }
+              </button>
               <Button variant="ghost" size="icon" onClick={handleLogout} title="Sign out" className="h-8 w-8">
                 <LogOut className="h-4 w-4" />
               </Button>
