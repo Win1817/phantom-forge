@@ -14,15 +14,15 @@ import { cn } from "@/lib/utils";
 const mobileNav = [
   { title: "Dashboard", url: "/app",             icon: LayoutDashboard },
   { title: "Collection", url: "/app/collection", icon: Library },
-  { title: "Decks",     url: "/app/decks",       icon: LayersIcon },
-  { title: "Decksmith", url: "/app/decksmith",   icon: Sparkles },
-  { title: "Wishlist",  url: "/app/wishlist",    icon: Heart },
+  { title: "Decks",      url: "/app/decks",      icon: LayersIcon },
+  { title: "Decksmith",  url: "/app/decksmith",  icon: Sparkles },
+  { title: "Wishlist",   url: "/app/wishlist",   icon: Heart },
 ];
 
 export function AppLayout() {
-  const navigate  = useNavigate();
-  const location  = useLocation();
-  const { user }  = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuth();
   const [query, setQuery] = useState("");
 
   useKeyboardShortcuts();
@@ -44,11 +44,14 @@ export function AppLayout() {
   return (
     <SidebarProvider defaultOpen={true}>
       <div className="flex min-h-screen w-full bg-background">
+        {/* Sidebar — desktop only */}
         <div className="hidden md:block">
           <AppSidebar />
         </div>
 
+        {/* Main column */}
         <div className="flex flex-1 flex-col min-w-0">
+          {/* Top header */}
           <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur-xl md:gap-3 md:px-4">
             <SidebarTrigger className="hidden md:flex text-muted-foreground hover:text-primary shrink-0" />
 
@@ -72,39 +75,39 @@ export function AppLayout() {
             </div>
           </header>
 
+          {/* Page content */}
           <main className="flex-1 p-4 pb-24 md:p-6 md:pb-6 lg:p-8 lg:pb-8 overflow-x-hidden">
             <Outlet />
           </main>
         </div>
       </div>
 
-      {/* Mobile bottom nav */}
+      {/* Mobile bottom navigation */}
       <nav className="fixed bottom-0 inset-x-0 z-40 flex md:hidden border-t border-border/80 bg-background/95 backdrop-blur-xl">
-        {mobileNav.map((item) => (
-          <NavLink
-            key={item.url}
-            to={item.url}
-            end
-            className={({ isActive }) => cn(
-              "relative flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
-              isActive ? "text-primary" : "text-muted-foreground/70"
-            )}
-          >
-            {({ isActive }) => (
-              <>
-                <span className={cn(
-                  "flex h-7 w-7 items-center justify-center rounded-lg transition-all",
-                  isActive ? "bg-primary/15 text-primary shadow-[0_0_12px_hsl(42_78%_60%_/0.3)]" : "text-muted-foreground"
-                )}>
-                  <item.icon className="h-[18px] w-[18px]" />
-                </span>
-                <span>{item.title}</span>
-                {isActive && <span className="absolute top-0 h-[2px] w-8 rounded-b-full bg-primary shadow-[0_0_8px_hsl(42_78%_60%_/0.6)]" />}
-              </>
-            )}
-          </NavLink>
-        ))}
-      </nav>
+        {mobileNav.map((item) => {
+          const active = isActive(item.url);
+          return (
+            <NavLink
+              key={item.url}
+              to={item.url}
+              end={item.url === "/app"}
+              className="relative flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors"
+            >
+              <span className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-lg transition-all",
+                active ? "bg-primary/15 text-primary shadow-[0_0_12px_hsl(42_78%_60%_/0.3)]" : "text-muted-foreground"
+              )}>
+                <item.icon className="h-[18px] w-[18px]" />
+              </span>
+              <span className={cn(active ? "text-primary" : "text-muted-foreground/70")}>
+                {item.title}
+              </span>
+              {active && (
+                <span className="absolute top-0 h-[2px] w-8 rounded-b-full bg-primary shadow-[0_0_8px_hsl(42_78%_60%_/0.6)]" />
+              )}
+            </NavLink>
+          );
+        })}
       </nav>
 
       {/* Keyboard shortcut help overlay */}
