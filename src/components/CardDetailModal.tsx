@@ -183,11 +183,11 @@ const CardDetailModal = ({ cardId, siblingIds = [], onChangeCardId, onClose }: P
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
-        <DrawerContent className="max-h-[92vh]">
+        <DrawerContent className="h-[95vh]">
           <DrawerTitle className="sr-only">{card?.name ?? "Card details"}</DrawerTitle>
           <DrawerDescription className="sr-only">Card details and analysis</DrawerDescription>
-          <ScrollArea className="max-h-[88vh]">
-            <div className="p-4 pb-8">{body}</div>
+          <ScrollArea className="h-full">
+            <div className="p-4 pb-28">{body}</div>
           </ScrollArea>
         </DrawerContent>
       </Drawer>
@@ -324,40 +324,40 @@ const CardDetailBody = ({
       {/* ── MOBILE layout ── */}
       {isMobile ? (
         <>
-          {/* Name + set info */}
-          <div>
-            <h2 className="font-fantasy text-xl font-bold text-gradient-gold leading-tight">{card.name}</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {card.type_line ?? face?.type_line}
-              {card.set_name && <> · <span className="uppercase tracking-wide">{card.set_name}</span></>}
-              {card.collector_number && <> · #{card.collector_number}</>}
-            </p>
-          </div>
+          {/* Top row: image left, info right */}
+          <div className="flex gap-3">
+            {/* Card image — fixed width */}
+            <div className="w-[130px] shrink-0 overflow-hidden rounded-lg border border-border bg-secondary ring-1 ring-border">
+              {img ? (
+                <img src={img} alt={card.name} loading="eager" className="h-auto w-full" />
+              ) : (
+                <div className="aspect-[488/680] flex items-center justify-center p-2 text-center text-xs text-muted-foreground">
+                  {card.name}
+                </div>
+              )}
+            </div>
 
-          {/* Full-width card image */}
-          <div className="mx-auto w-[220px] overflow-hidden rounded-xl border border-border bg-secondary ring-1 ring-border">
-            {img ? (
-              <img src={img} alt={card.name} loading="eager" className="h-auto w-full" />
-            ) : (
-              <div className="aspect-[488/680] flex items-center justify-center p-4 text-center text-sm text-muted-foreground">
-                {card.name}
+            {/* Info column */}
+            <div className="flex-1 min-w-0 flex flex-col gap-2 justify-between py-0.5">
+              <div>
+                <h2 className="font-fantasy text-lg font-bold text-gradient-gold leading-tight">{card.name}</h2>
+                <p className="mt-0.5 text-[11px] text-muted-foreground leading-snug">
+                  {card.type_line ?? face?.type_line}
+                  {card.set_name && <><br /><span className="uppercase tracking-wide">{card.set_name}</span> · #{card.collector_number}</>}
+                </p>
               </div>
-            )}
+              {badgesEl}
+              {priceEl}
+            </div>
           </div>
 
-          {/* Badges row */}
-          {badgesEl}
-
-          {/* Price row */}
-          {priceEl}
-
-          {/* Action buttons — full width stacked */}
-          <div className="flex flex-col gap-2">
+          {/* Action buttons — full width */}
+          <div className="flex gap-2">
             <Button onClick={onAdd} disabled={adding}
-              className="w-full h-12 text-base bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90">
-              {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Library className="mr-2 h-5 w-5" /> Inventory</>}
+              className="flex-1 h-11 bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90">
+              {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Library className="mr-2 h-4 w-4" /> Inventory</>}
             </Button>
-            <Button variant="secondary" disabled className="w-full h-11 text-sm">
+            <Button variant="secondary" disabled className="flex-1 h-11">
               <Plus className="mr-2 h-4 w-4" /> Add to Deck
             </Button>
           </div>
