@@ -324,7 +324,7 @@ const CardDetailBody = ({
       {/* ── MOBILE layout ── */}
       {isMobile ? (
         <>
-          {/* Name above everything */}
+          {/* Name + set info */}
           <div>
             <h2 className="font-fantasy text-xl font-bold text-gradient-gold leading-tight">{card.name}</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
@@ -334,14 +334,32 @@ const CardDetailBody = ({
             </p>
           </div>
 
-          {/* Compact image + badges side-by-side */}
-          <div className="flex gap-3 items-start">
-            {imageEl(true)}
-            <div className="flex-1 space-y-2 min-w-0">
-              {badgesEl}
-              {priceEl}
-              {actionEl(true)}
-            </div>
+          {/* Full-width card image */}
+          <div className="mx-auto w-[220px] overflow-hidden rounded-xl border border-border bg-secondary ring-1 ring-border">
+            {img ? (
+              <img src={img} alt={card.name} loading="eager" className="h-auto w-full" />
+            ) : (
+              <div className="aspect-[488/680] flex items-center justify-center p-4 text-center text-sm text-muted-foreground">
+                {card.name}
+              </div>
+            )}
+          </div>
+
+          {/* Badges row */}
+          {badgesEl}
+
+          {/* Price row */}
+          {priceEl}
+
+          {/* Action buttons — full width stacked */}
+          <div className="flex flex-col gap-2">
+            <Button onClick={onAdd} disabled={adding}
+              className="w-full h-12 text-base bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90">
+              {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Library className="mr-2 h-5 w-5" /> Inventory</>}
+            </Button>
+            <Button variant="secondary" disabled className="w-full h-11 text-sm">
+              <Plus className="mr-2 h-4 w-4" /> Add to Deck
+            </Button>
           </div>
 
           {/* Rest of content */}
