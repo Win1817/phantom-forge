@@ -242,7 +242,7 @@ const CardDetailBody = ({
   const legalities = card.legalities ?? {};
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Nav header */}
       <div className="flex items-center justify-between">
         <div className="flex gap-1">
@@ -263,53 +263,123 @@ const CardDetailBody = ({
         </a>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-[minmax(0,260px)_1fr] lg:grid-cols-[minmax(0,300px)_1fr]">
-        {/* Image */}
-        <div className="space-y-3">
-          <div className="overflow-hidden rounded-xl border border-border bg-secondary ring-1 ring-border">
+      {/* ── Mobile: card name + type ABOVE image so it's immediately visible ── */}
+      {isMobile && (
+        <div>
+          <h2 className="font-fantasy text-xl font-bold text-gradient-gold leading-tight">{card.name}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {card.type_line ?? face?.type_line}
+            {card.set_name && <> · <span className="uppercase tracking-wide">{card.set_name}</span></>}
+            {card.collector_number && <> · #{card.collector_number}</>}
+          </p>
+        </div>
+      )}
+
+      {/* ── Mobile: compact image + action buttons side-by-side ── */}
+      {isMobile ? (
+        <div className="flex gap-3 items-start">
+          {/* Compact card image */}
+          <div className="w-[140px] shrink-0 overflow-hidden rounded-xl border border-border bg-secondary ring-1 ring-border">
             {img ? (
-              <img src={img} alt={card.name} loading="lazy" className="h-auto w-full" />
+              <img src={img} alt={card.name} loading="eager" className="h-auto w-full" />
             ) : (
-              <div className="aspect-[488/680] flex items-center justify-center p-4 text-center text-sm text-muted-foreground">
+              <div className="aspect-[488/680] flex items-center justify-center p-2 text-center text-xs text-muted-foreground">
                 {card.name}
               </div>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Button onClick={onAdd} disabled={adding} className="bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90">
-              {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Library className="mr-1.5 h-4 w-4" /> Inventory</>}
-            </Button>
-            <Button variant="secondary" disabled title="Coming soon">
-              <Plus className="mr-1.5 h-4 w-4" /> Deck
-            </Button>
+
+          {/* Badges + actions stacked beside the image */}
+          <div className="flex-1 space-y-2.5 min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="outline" className={`text-[10px] uppercase ${RARITY_CLASS[rarity] ?? RARITY_CLASS.common}`}>
+                {rarity}
+              </Badge>
+              {(card.mana_cost ?? face?.mana_cost) && (
+                <Badge variant="outline" className="font-mono text-[11px]">{card.mana_cost ?? face?.mana_cost}</Badge>
+              )}
+              {power && toughness && (
+                <Badge variant="outline" className="text-[11px]">{power}/{toughness}</Badge>
+              )}
+              {loyalty && <Badge variant="outline" className="text-[11px]">Loyalty {loyalty}</Badge>}
+            </div>
+            {(card.prices?.usd || card.prices?.usd_foil) && (
+              <div className="flex flex-wrap gap-1.5">
+                {card.prices?.usd && <Badge variant="outline" className="text-[11px] text-mana-green border-mana-green/40">${card.prices.usd}</Badge>}
+                {card.prices?.usd_foil && <Badge variant="outline" className="text-[11px] text-primary border-primary/40">Foil ${card.prices.usd_foil}</Badge>}
+              </div>
+            )}
+            <div className="flex flex-col gap-2 pt-1">
+              <Button onClick={onAdd} disabled={adding} size="sm" className="w-full bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90">
+                {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Library className="mr-1.5 h-4 w-4" /> Inventory</>}
+              </Button>
+              <Button variant="secondary" size="sm" disabled title="Coming soon" className="w-full">
+                <Plus className="mr-1.5 h-4 w-4" /> Deck
+              </Button>
+            </div>
           </div>
         </div>
+      ) : (
+        /* ── Desktop: full-width image in left column ── */
+        null
+      )}
 
-        {/* Details */}
+      {/* ── Desktop 2-column grid / Mobile details below ── */}
+      <div className={isMobile ? "space-y-4" : "grid gap-6 md:grid-cols-[minmax(0,260px)_1fr] lg:grid-cols-[minmax(0,300px)_1fr]"}>
+        {/* Desktop image column */}
+        {!isMobile && (
+          <div className="space-y-3">
+            <div className="overflow-hidden rounded-xl border border-border bg-secondary ring-1 ring-border">
+              {img ? (
+                <img src={img} alt={card.name} loading="eager" className="h-auto w-full" />
+              ) : (
+                <div className="aspect-[488/680] flex items-center justify-center p-4 text-center text-sm text-muted-foreground">
+                  {card.name}
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button onClick={onAdd} disabled={adding} className="bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90">
+                {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Library className="mr-1.5 h-4 w-4" /> Inventory</>}
+              </Button>
+              <Button variant="secondary" disabled title="Coming soon">
+                <Plus className="mr-1.5 h-4 w-4" /> Deck
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Details column (desktop) / Details section (mobile) */}
         <div className="space-y-4">
-          <div>
-            <h2 className="font-fantasy text-2xl font-bold text-gradient-gold md:text-3xl">{card.name}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {card.type_line ?? face?.type_line}
-              {card.set_name && <> · <span className="uppercase tracking-wide">{card.set_name}</span></>}
-              {card.collector_number && <> · #{card.collector_number}</>}
-            </p>
-          </div>
+          {/* Desktop-only: name + type here (mobile shows it above) */}
+          {!isMobile && (
+            <div>
+              <h2 className="font-fantasy text-2xl font-bold text-gradient-gold md:text-3xl">{card.name}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {card.type_line ?? face?.type_line}
+                {card.set_name && <> · <span className="uppercase tracking-wide">{card.set_name}</span></>}
+                {card.collector_number && <> · #{card.collector_number}</>}
+              </p>
+            </div>
+          )}
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className={`text-[10px] uppercase ${RARITY_CLASS[rarity] ?? RARITY_CLASS.common}`}>
-              {rarity}
-            </Badge>
-            {(card.mana_cost ?? face?.mana_cost) && (
-              <Badge variant="outline" className="font-mono text-[11px]">{card.mana_cost ?? face?.mana_cost}</Badge>
-            )}
-            {power && toughness && (
-              <Badge variant="outline" className="text-[11px]">{power}/{toughness}</Badge>
-            )}
-            {loyalty && <Badge variant="outline" className="text-[11px]">Loyalty {loyalty}</Badge>}
-            {card.prices?.usd && <Badge variant="outline" className="text-[11px] text-mana-green border-mana-green/40">${card.prices.usd}</Badge>}
-            {card.prices?.usd_foil && <Badge variant="outline" className="text-[11px] text-primary border-primary/40">Foil ${card.prices.usd_foil}</Badge>}
-          </div>
+          {/* Desktop-only badges (mobile shows them beside image) */}
+          {!isMobile && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className={`text-[10px] uppercase ${RARITY_CLASS[rarity] ?? RARITY_CLASS.common}`}>
+                {rarity}
+              </Badge>
+              {(card.mana_cost ?? face?.mana_cost) && (
+                <Badge variant="outline" className="font-mono text-[11px]">{card.mana_cost ?? face?.mana_cost}</Badge>
+              )}
+              {power && toughness && (
+                <Badge variant="outline" className="text-[11px]">{power}/{toughness}</Badge>
+              )}
+              {loyalty && <Badge variant="outline" className="text-[11px]">Loyalty {loyalty}</Badge>}
+              {card.prices?.usd && <Badge variant="outline" className="text-[11px] text-mana-green border-mana-green/40">${card.prices.usd}</Badge>}
+              {card.prices?.usd_foil && <Badge variant="outline" className="text-[11px] text-primary border-primary/40">Foil ${card.prices.usd_foil}</Badge>}
+            </div>
+          )}
 
           {oracle && (
             <div className="rounded-lg border border-border bg-secondary/40 p-4">
