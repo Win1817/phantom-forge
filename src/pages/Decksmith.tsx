@@ -111,11 +111,25 @@ export default function Decksmith() {
     }
   };
 
-  const copyExport = () => {
+  const copyExport = async () => {
     if (!generated) return;
-    navigator.clipboard.writeText(generated.deckList);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(generated.deckList);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const el = document.createElement("textarea");
+      el.value = generated.deckList;
+      el.style.position = "fixed";
+      el.style.opacity = "0";
+      document.body.appendChild(el);
+      el.focus();
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const downloadExport = () => {

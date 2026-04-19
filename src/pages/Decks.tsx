@@ -116,10 +116,25 @@ export default function Decks() {
     setCopied(false);
   };
 
-  const copyExport = () => {
-    navigator.clipboard.writeText(exportText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyExport = async () => {
+    try {
+      await navigator.clipboard.writeText(exportText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for mobile browsers that block clipboard API
+      const el = document.createElement("textarea");
+      el.value = exportText;
+      el.style.position = "fixed";
+      el.style.opacity = "0";
+      document.body.appendChild(el);
+      el.focus();
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const downloadExport = () => {
