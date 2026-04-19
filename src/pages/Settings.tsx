@@ -63,7 +63,8 @@ const Settings = () => {
 
       // Persist to auth metadata
       await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
-      await supabase.from("profiles").upsert({ id: user.id, avatar_url: publicUrl }, { onConflict: "id" });
+      // Update profiles row if it exists (ignore error if it doesn't)
+      await supabase.from("profiles").update({ avatar_url: publicUrl }).eq("id", user.id);
 
       toast.success("Profile picture updated.");
     } catch (err) {
@@ -82,7 +83,8 @@ const Settings = () => {
     try {
       const { error: metaErr } = await supabase.auth.updateUser({ data: { display_name: trimmed } });
       if (metaErr) throw metaErr;
-      await supabase.from("profiles").upsert({ id: user!.id, display_name: trimmed }, { onConflict: "id" });
+      // Update profiles row if it exists (ignore error if it doesn't)
+      await supabase.from("profiles").update({ display_name: trimmed }).eq("id", user!.id);
       toast.success("Profile saved.");
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
