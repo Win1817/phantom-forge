@@ -38,8 +38,11 @@ export function AppLayout() {
   };
 
   const initial = user?.email?.[0]?.toUpperCase() ?? "P";
-  const isActive = (url: string) =>
-    url === "/app" ? location.pathname === "/app" : location.pathname.startsWith(url);
+  const isActive = (url: string) => {
+    if (url === "/app") return location.pathname === "/app";
+    // Exact match OR child route (e.g. /app/decks/123) but NOT sibling prefix collision
+    return location.pathname === url || location.pathname.startsWith(url + "/");
+  };
 
   return (
     <SidebarProvider defaultOpen={true}>
