@@ -105,7 +105,7 @@ export async function findRelatedCards(card: {
   colors?: string[];
   type_line?: string;
   oracle_text?: string;
-}): Promise<string[]> {
+}, limit = 5): Promise<string[]> {
   if (relatedCache.has(card.name)) return relatedCache.get(card.name)!;
 
   try {
@@ -141,7 +141,7 @@ export async function findRelatedCards(card: {
 
     const json = await res.json();
     const names: string[] = (json.data ?? [])
-      .slice(0, 5)
+      .slice(0, limit)
       .map((c: ScryfallCard) => c.name);
 
     relatedCache.set(card.name, names);
@@ -159,7 +159,7 @@ const comboCache = new Map<string, ComboResult[]>();
  * Look up known combos for a card via the CommanderSpellbook API.
  * Returns up to 3 combos as human-readable strings.
  */
-export async function findCombos(cardName: string): Promise<string[]> {
+export async function findCombos(cardName: string, limit = 3): Promise<string[]> {
   if (comboCache.has(cardName)) {
     return comboCache.get(cardName)!.map(formatCombo);
   }
@@ -167,7 +167,7 @@ export async function findCombos(cardName: string): Promise<string[]> {
   try {
     const encoded = encodeURIComponent(`card:"${cardName}"`);
     const res = await fetch(
-      `https://backend.commanderspellbook.com/variants/?q=${encoded}&limit=3`
+      `https://backend.commanderspellbook.com/variants/?q=${encoded}&limit=${limit}`
     );
     if (!res.ok) return [];
 
