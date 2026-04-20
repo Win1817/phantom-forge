@@ -12,12 +12,7 @@
  */
 
 import { buildDeckMath } from "./deckBuilder";
-import {
-  classifyRole as _classifyRole,
-  findRelatedCards as _findRelatedCards,
-  findCombos as _findCombos,
-  type CardRole,
-} from "./cardAnalytics";
+import type { CardRole } from "./cardAnalytics";
 
 // ── Re-export core analytics ──────────────────────────────────────────────────
 
