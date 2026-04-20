@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Sparkles, Download, Copy, Check, Loader2, Wand2, Zap, Library, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +45,7 @@ type BuildStep = "idle" | "fetching" | "narrative" | "done";
 
 export default function Decksmith() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [format, setFormat]               = useState("Commander");
   const [style, setStyle]                 = useState("Midrange");
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
@@ -202,6 +204,8 @@ export default function Decksmith() {
             scryfall_id: card?.id ?? "unknown",
             card_name: line.name,
             quantity: line.quantity,
+            set_code: card?.set ?? line.set ?? null,
+            collector_number: card?.collector_number ?? line.collectorNumber ?? null,
             image_url: card ? getCardImage(card) : null,
             mana_cost: card?.mana_cost ?? null,
             cmc: card?.cmc ?? null,
@@ -209,12 +213,60 @@ export default function Decksmith() {
             colors: card?.colors ?? [],
             is_commander: line.isCommander,
             is_sideboard: line.isSideboard,
+            // Extra fields for collection sync
+            set_name: card?.set_name ?? null,
+            rarity: card?.rarity ?? null,
+            price_usd: card?.prices?.usd ? Number(card.prices.usd) : null,
           };
         })
       );
 
       await supabase.from("deck_cards").insert(inserts);
-      toast.success(`"${generated.narrative.name}" saved to Deck Workshop`);
+
+      // ── Sync to collection_cards ──────────────────────────────────────────
+      // Merge duplicates (same scryfall_id) summing quantities
+      const uniqueMap: Record<string, typeof inserts[0] & { total: number }> = {};
+      for (const c of inserts) {
+        if (c.scryfall_id === "unknown") continue;
+        if (!uniqueMap[c.scryfall_id]) uniqueMap[c.scryfall_id] = { ...c, total: 0 };
+        uniqueMap[c.scryfall_id].total += c.quantity;
+      }
+
+      for (const c of Object.values(uniqueMap)) {
+        const { data: existing } = await supabase
+          .from("collection_cards")
+          .select("id, quantity")
+          .eq("user_id", user.id)
+          .eq("scryfall_id", c.scryfall_id)
+          .maybeSingle();
+
+        if (existing) {
+          await supabase.from("collection_cards")
+            .update({ quantity: existing.quantity + c.total })
+            .eq("id", existing.id);
+        } else {
+          await supabase.from("collection_cards").insert({
+            user_id: user.id,
+            scryfall_id: c.scryfall_id,
+            card_name: c.card_name,
+            set_code: c.set_code,
+            set_name: (c as any).set_name ?? null,
+            collector_number: c.collector_number,
+            rarity: (c as any).rarity ?? null,
+            image_url: c.image_url,
+            mana_cost: c.mana_cost,
+            cmc: c.cmc,
+            type_line: c.type_line,
+            colors: c.colors,
+            price_usd: (c as any).price_usd ?? null,
+            quantity: c.total,
+          });
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
+      toast.success(`"${generated.narrative.name}" saved — ${inserts.length} cards added to Decks & Collection`);
+      navigate(`/app/decks/${deck.id}`);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
