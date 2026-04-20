@@ -7,12 +7,6 @@
  *   3. Balance the mana curve algorithmically
  *   4. Return a card list in Arena/MTGO format
  *   5. AI only narrates (name, description, strategy) — no card selection
- *
- * Benefits vs pure-AI generation:
- *   - Zero hallucinated card names or set codes
- *   - Real price filtering via Scryfall prices
- *   - Guaranteed format legality
- *   - Deterministic, reproducible results
  */
 
 import type { ScryfallCard } from "./scryfall";
@@ -22,10 +16,9 @@ import type { ScryfallCard } from "./scryfall";
 export interface DeckBuilderParams {
   format: string;
   style: string;
-  colors: string[];      // WUBRG subset
-  budget: string;        // "budget" | "mid" | "competitive" | "any"
+  colors: string[];
+  budget: string;
   notes?: string;
-  /** Optional: user's collection cards to prioritize in deck building */
   collectionCards?: CollectionCard[];
   useCollection?: boolean;
 }
@@ -44,11 +37,8 @@ export interface CollectionCard {
 }
 
 export interface BuiltDeck {
-  /** Selected cards with quantities */
   cards: Array<ScryfallCard & { quantity: number }>;
-  /** Arena/MTGO text export */
   deckList: string;
-  /** Slot breakdown for transparency */
   slotSummary: Record<string, number>;
 }
 
@@ -59,7 +49,6 @@ interface FormatConfig {
   landCount: number;
   isCommander: boolean;
   maxCopies: number;
-  /** Scryfall format code */
   scryfallKey: string;
 }
 
@@ -72,7 +61,7 @@ const FORMAT_CONFIG: Record<string, FormatConfig> = {
   Casual:    { deckSize: 60,  landCount: 24, isCommander: false, maxCopies: 4,  scryfallKey: ""          },
 };
 
-// ─── Budget price cap (per card, USD) ────────────────────────────────────────
+// ─── Budget price cap ─────────────────────────────────────────────────────────
 
 const BUDGET_CAP: Record<string, number> = {
   budget:      1.0,
@@ -82,94 +71,86 @@ const BUDGET_CAP: Record<string, number> = {
 };
 
 // ─── Slot definitions ─────────────────────────────────────────────────────────
+// count60 values now sum to exactly 36 (60 - 24 lands)
+// countCdr values sum to exactly 63 (100 - 37 lands)
 
 interface Slot {
   name: string;
-  /** How many cards to fill in Commander / 60-card */
   countCdr: number;
   count60: number;
-  /** Scryfall oracle query fragment */
   oracleQuery: string;
-  /** Additional type filter */
   typeQuery?: string;
-  /** Prefer high CMC or low CMC */
-  sortBy?: "edhrec" | "cmc-asc" | "cmc-desc" | "usd-asc";
+  sortBy?: string;
 }
-
-// Style modifiers tweak slot weights
-const STYLE_SLOT_BIAS: Record<string, Partial<Record<string, number>>> = {
-  Aggro:    { threats: +4, ramp: -2, draw: -1, control: -2 },
-  Control:  { counter: +4, removal: +2, draw: +2, threats: -3 },
-  Midrange: {},
-  Combo:    { combo: +4, draw: +2, ramp: +2, removal: -2 },
-  Tempo:    { counter: +2, threats: +2, ramp: -1 },
-  Ramp:     { ramp: +4, threats: +2, draw: +1 },
-};
 
 const BASE_SLOTS: Slot[] = [
   {
     name: "ramp",
-    countCdr: 12, count60: 4,
+    countCdr: 12, count60: 6,
     oracleQuery: `(o:"add {" OR o:"search your library for a basic land" OR o:"put a land" OR o:"land card onto the battlefield")`,
     typeQuery: `-t:land`,
-    sortBy: "edhrec",
   },
   {
     name: "draw",
-    countCdr: 10, count60: 4,
+    countCdr: 10, count60: 6,
     oracleQuery: `(o:"draw a card" OR o:"draw two" OR o:"draw three" OR o:"draw cards" OR o:"draw X")`,
     typeQuery: `-t:land`,
-    sortBy: "edhrec",
   },
   {
     name: "removal",
-    countCdr: 10, count60: 4,
+    countCdr: 10, count60: 6,
     oracleQuery: `(o:"destroy target creature" OR o:"exile target creature" OR o:"destroy target permanent" OR o:"exile target permanent" OR o:"deals damage to any target")`,
     typeQuery: `-t:land`,
-    sortBy: "edhrec",
   },
   {
     name: "counter",
     countCdr: 5, count60: 2,
     oracleQuery: `o:"counter target spell"`,
     typeQuery: `t:instant`,
-    sortBy: "edhrec",
   },
   {
     name: "threats",
-    countCdr: 20, count60: 12,
+    countCdr: 20, count60: 14,
     oracleQuery: `(o:"flying" OR o:"trample" OR o:"haste") pow>=3`,
     typeQuery: `t:creature`,
-    sortBy: "edhrec",
   },
   {
     name: "support",
-    countCdr: 5, count60: 4,
+    countCdr: 5, count60: 2,
     oracleQuery: `(o:"+1/+1 counter" OR o:"hexproof" OR o:"indestructible" OR o:"whenever you gain life")`,
     typeQuery: `-t:land -t:basic`,
-    sortBy: "edhrec",
-  },
-  {
-    name: "utility",
-    countCdr: 0, count60: 0,
-    oracleQuery: `(t:enchantment OR t:artifact) -t:land`,
-    typeQuery: `-t:creature`,
-    sortBy: "edhrec",
   },
 ];
 
+// Style modifiers — keep totals balanced
+const STYLE_SLOT_BIAS: Record<string, Partial<Record<string, number>>> = {
+  Aggro:    { threats: +4, ramp: -2, draw: -1, counter: -1 },
+  Control:  { counter: +3, removal: +2, draw: +2, threats: -4, ramp: -1, support: -2 },
+  Midrange: {},
+  Combo:    { draw: +3, ramp: +2, counter: +1, threats: -3, support: -1, removal: -2 },
+  Tempo:    { counter: +2, threats: +2, ramp: -2, support: -2 },
+  Ramp:     { ramp: +4, threats: +2, draw: +1, counter: -3, support: -2, removal: -2 },
+};
+
 // ─── Scryfall helpers ─────────────────────────────────────────────────────────
 
-async function scryfallSearch(query: string): Promise<ScryfallCard[]> {
+async function scryfallSearch(query: string, pages = 1): Promise<ScryfallCard[]> {
+  const results: ScryfallCard[] = [];
   try {
-    const url = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}&order=edhrec&page=1`;
-    const res = await fetch(url);
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.data ?? [];
+    for (let page = 1; page <= pages; page++) {
+      const url = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}&order=edhrec&page=${page}`;
+      const res = await fetch(url);
+      if (!res.ok) break;
+      const json = await res.json();
+      results.push(...(json.data ?? []));
+      if (!json.has_more) break;
+      // Small delay to respect Scryfall rate limits
+      await new Promise((r) => setTimeout(r, 80));
+    }
   } catch {
-    return [];
+    // ignore
   }
+  return results;
 }
 
 function priceOf(card: ScryfallCard): number {
@@ -197,53 +178,24 @@ const BASIC_LAND_BY_COLOR: Record<string, { name: string; set: string; num: stri
 function buildLands(
   colors: string[],
   count: number,
-  budget: string,
-  priceCap: number
 ): Array<ScryfallCard & { quantity: number }> {
+  if (count <= 0) return [];
   const effectiveColors = colors.length ? colors : ["W", "U", "B", "R", "G"];
-
-  if (colors.length === 0 || budget === "budget") {
-    // Pure basics — always free
-    const perColor = Math.floor(count / effectiveColors.length);
-    const remainder = count % effectiveColors.length;
-    return effectiveColors.map((c, i) => {
-      const land = BASIC_LAND_BY_COLOR[c] ?? BASIC_LAND_BY_COLOR["W"];
-      return {
-        id: `basic-${c}`,
-        name: land.name,
-        set: land.set,
-        collector_number: land.num,
-        type_line: "Basic Land",
-        cmc: 0,
-        colors: [],
-        quantity: perColor + (i < remainder ? 1 : 0),
-      } as ScryfallCard & { quantity: number };
-    });
-  }
-
-  // Try to include a few dual/fetch lands for non-budget
-  const cheapDuals: Array<ScryfallCard & { quantity: number }> = [];
-  const basicsCount = Math.max(Math.floor(count * 0.6), effectiveColors.length);
-  const dualCount = count - basicsCount;
-
-  // Basics
-  const basics = buildLands(effectiveColors, basicsCount, "budget", priceCap);
-
-  // Dual placeholder entries (will be resolved by Decksmith save flow)
-  if (dualCount > 0 && effectiveColors.length > 1) {
-    cheapDuals.push({
-      id: "command-tower",
-      name: "Command Tower",
-      set: "CLB",
-      collector_number: "361",
-      type_line: "Land",
+  const perColor = Math.floor(count / effectiveColors.length);
+  const remainder = count % effectiveColors.length;
+  return effectiveColors.map((c, i) => {
+    const land = BASIC_LAND_BY_COLOR[c] ?? BASIC_LAND_BY_COLOR["W"];
+    return {
+      id: `basic-${c}`,
+      name: land.name,
+      set: land.set,
+      collector_number: land.num,
+      type_line: "Basic Land",
       cmc: 0,
       colors: [],
-      quantity: Math.min(dualCount, 1),
-    } as ScryfallCard & { quantity: number });
-  }
-
-  return [...basics, ...cheapDuals];
+      quantity: perColor + (i < remainder ? 1 : 0),
+    } as ScryfallCard & { quantity: number };
+  });
 }
 
 // ─── Commander picker ─────────────────────────────────────────────────────────
@@ -252,7 +204,6 @@ async function pickCommander(
   colors: string[],
   style: string,
   priceCap: number,
-  format: string
 ): Promise<(ScryfallCard & { quantity: number }) | null> {
   const colorId = colors.length ? colors.join("") : "WUBRG";
   const styleHint: Record<string, string> = {
@@ -263,12 +214,10 @@ async function pickCommander(
     Midrange: "",
     Tempo:    `(o:"flash" OR o:"flying") `,
   };
-
   const hint = styleHint[style] ?? "";
   const budgetQ = priceCap < 100 ? `usd<=${priceCap}` : "";
   const q = `is:commander ci<=${colorId} ${hint} ${budgetQ} order:edhrec`.trim();
-
-  const results = await scryfallSearch(q);
+  const results = await scryfallSearch(q, 1);
   const valid = results.filter((c) => priceOf(c) <= priceCap);
   if (!valid.length) return null;
   return { ...valid[0], quantity: 1 };
@@ -285,7 +234,7 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
   const usedNames = new Set<string>();
   const slotSummary: Record<string, number> = {};
 
-  // ── 0. Pre-process collection cards into a lookup map ──
+  // ── 0. Collection lookup ──
   const collectionMap = new Map<string, CollectionCard>();
   if (params.useCollection && params.collectionCards?.length) {
     for (const c of params.collectionCards) {
@@ -293,29 +242,27 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
     }
   }
 
-  /** Try to match a collection card to a slot's oracle query keywords */
   function matchesSlotOracle(card: CollectionCard, oracleQuery: string): boolean {
     if (!card.oracle_text && !card.type_line) return false;
     const text = `${card.oracle_text ?? ""} ${card.type_line ?? ""}`.toLowerCase();
-    // Extract quoted phrases from the oracle query and check if card text contains them
-    const phrases = [...oracleQuery.matchAll(/o:"([^"]+)"/g)].map(m => m[1].toLowerCase());
-    const typeTerms = [...oracleQuery.matchAll(/t:(\w+)/g)].map(m => m[1].toLowerCase());
-    const hasPhraseMatch = phrases.length === 0 || phrases.some(p => text.includes(p));
-    const hasTypeMatch = typeTerms.length === 0 || typeTerms.some(t => text.includes(t));
+    const phrases = [...oracleQuery.matchAll(/o:"([^"]+)"/g)].map((m) => m[1].toLowerCase());
+    const typeTerms = [...oracleQuery.matchAll(/t:(\w+)/g)].map((m) => m[1].toLowerCase());
+    const hasPhraseMatch = phrases.length === 0 || phrases.some((p) => text.includes(p));
+    const hasTypeMatch = typeTerms.length === 0 || typeTerms.some((t) => text.includes(t));
     return hasPhraseMatch && hasTypeMatch;
   }
 
   function colorMatches(card: CollectionCard): boolean {
     if (!colorId || params.colors.length === 0) return true;
     const cardColors = card.colors ?? [];
-    if (cardColors.length === 0) return true; // colorless cards are always ok
-    return cardColors.every(c => colorId.includes(c));
+    if (cardColors.length === 0) return true;
+    return cardColors.every((c) => colorId.includes(c));
   }
 
-  // ── 1. Pick commander (Commander format only) ──
+  // ── 1. Commander ──
   let commanderCard: (ScryfallCard & { quantity: number }) | null = null;
   if (config.isCommander) {
-    commanderCard = await pickCommander(params.colors, params.style, priceCap, params.format);
+    commanderCard = await pickCommander(params.colors, params.style, priceCap);
     if (commanderCard) {
       selectedCards.push(commanderCard);
       usedNames.add(commanderCard.name);
@@ -323,7 +270,7 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
     }
   }
 
-  // ── 2. Apply style bias to slot counts ──
+  // ── 2. Apply style bias — ensure totals still add up ──
   const bias = STYLE_SLOT_BIAS[params.style] ?? {};
   const slots = BASE_SLOTS.map((slot) => ({
     ...slot,
@@ -331,131 +278,104 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
     count60: Math.max(0, slot.count60 + Math.floor((bias[slot.name] ?? 0) / 2)),
   }));
 
-  // ── 3. Fill each role slot — collection first, then Scryfall ──
+  // ── 3. Fill each slot ──
   for (const slot of slots) {
     const target = config.isCommander ? slot.countCdr : slot.count60;
     if (target <= 0) continue;
 
     let filled = 0;
 
-    // ── 3a. Try collection cards first ──
+    // 3a. Collection first
     if (collectionMap.size > 0) {
       for (const [, colCard] of collectionMap) {
         if (filled >= target) break;
         if (usedNames.has(colCard.card_name)) continue;
         if (!colorMatches(colCard)) continue;
         if (!matchesSlotOracle(colCard, slot.oracleQuery)) continue;
-
-        const availableQty = colCard.quantity;
-        const qty = config.isCommander ? 1 : Math.min(config.maxCopies, target - filled, availableQty);
+        const qty = config.isCommander ? 1 : Math.min(config.maxCopies, target - filled, colCard.quantity);
         selectedCards.push({
-          id: colCard.scryfall_id,
-          name: colCard.card_name,
-          set: colCard.set_code ?? "UNK",
-          collector_number: colCard.collector_number ?? "0",
-          type_line: colCard.type_line ?? "",
-          mana_cost: colCard.mana_cost ?? "",
-          cmc: colCard.cmc ?? 0,
-          colors: colCard.colors ?? [],
-          quantity: qty,
-          // Mark as from collection for display
-          _fromCollection: true,
-        } as ScryfallCard & { quantity: number; _fromCollection?: boolean });
+          id: colCard.scryfall_id, name: colCard.card_name,
+          set: colCard.set_code ?? "UNK", collector_number: colCard.collector_number ?? "0",
+          type_line: colCard.type_line ?? "", mana_cost: colCard.mana_cost ?? "",
+          cmc: colCard.cmc ?? 0, colors: colCard.colors ?? [], quantity: qty,
+        } as ScryfallCard & { quantity: number });
         usedNames.add(colCard.card_name);
         filled += qty;
       }
     }
 
-    // ── 3b. Fill remaining slots from Scryfall ──
-    const remaining = target - filled;
-    if (remaining > 0) {
+    // 3b. Scryfall — fetch 2 pages to get enough candidates
+    if (filled < target) {
       const colorFilter = colorId ? `ci<=${colorId}` : "";
       const formatFilter = config.scryfallKey ? `f:${config.scryfallKey}` : "";
       const budgetFilter = priceCap < 100 ? `usd<=${priceCap}` : "";
       const typeFilter = slot.typeQuery ?? "";
+      const q = [slot.oracleQuery, colorFilter, formatFilter, budgetFilter, typeFilter, "order:edhrec"]
+        .filter(Boolean).join(" ");
 
-      const q = [
-        slot.oracleQuery,
-        colorFilter,
-        formatFilter,
-        budgetFilter,
-        typeFilter,
-        "order:edhrec",
-      ].filter(Boolean).join(" ");
-
-      const results = await scryfallSearch(q);
-
+      const results = await scryfallSearch(q, 2);
       for (const card of results) {
         if (filled >= target) break;
         if (usedNames.has(card.name)) continue;
         if (priceOf(card) > priceCap) continue;
-
         const qty = config.isCommander ? 1 : Math.min(config.maxCopies, target - filled);
         selectedCards.push({ ...card, quantity: qty });
         usedNames.add(card.name);
         filled += qty;
       }
+    }
 
-      // ── Fallback: if still short, use a broad creature query for this slot ──
-      if (filled < target) {
-        const fallbackQ = [
-          `t:creature`,
-          colorFilter,
-          formatFilter,
-          "order:edhrec",
-        ].filter(Boolean).join(" ");
-        const fallbackResults = await scryfallSearch(fallbackQ);
-        for (const card of fallbackResults) {
-          if (filled >= target) break;
-          if (usedNames.has(card.name)) continue;
-          if (priceOf(card) > priceCap) continue;
-          const qty = config.isCommander ? 1 : Math.min(config.maxCopies, target - filled);
-          selectedCards.push({ ...card, quantity: qty });
-          usedNames.add(card.name);
-          filled += qty;
-        }
+    // 3c. Broad fallback — no oracle filter, just color + format
+    if (filled < target) {
+      const colorFilter = colorId ? `ci<=${colorId}` : "";
+      const formatFilter = config.scryfallKey ? `f:${config.scryfallKey}` : "";
+      const fallbackQ = [`t:creature`, colorFilter, formatFilter, "order:edhrec"].filter(Boolean).join(" ");
+      const fallback = await scryfallSearch(fallbackQ, 2);
+      for (const card of fallback) {
+        if (filled >= target) break;
+        if (usedNames.has(card.name)) continue;
+        if (priceOf(card) > priceCap) continue;
+        const qty = config.isCommander ? 1 : Math.min(config.maxCopies, target - filled);
+        selectedCards.push({ ...card, quantity: qty });
+        usedNames.add(card.name);
+        filled += qty;
       }
     }
 
     slotSummary[slot.name] = filled;
   }
 
-  // ── 4. Pad to fill any gaps (Scryfall may return fewer results than slot target) ──
-  let nonLandTotal = selectedCards.reduce((s, c) => s + c.quantity, 0);
+  // ── 4. Final gap fill — should rarely trigger now ──
+  const nonLandTotal = selectedCards.reduce((s, c) => s + c.quantity, 0);
   const targetNonLand = config.deckSize - config.landCount;
+
   if (nonLandTotal < targetNonLand) {
     const gap = targetNonLand - nonLandTotal;
     const colorFilter = colorId ? `ci<=${colorId}` : "";
     const formatFilter = config.scryfallKey ? `f:${config.scryfallKey}` : "";
-    const padQ = [
-      `t:creature pow>=2`,
-      colorFilter,
-      formatFilter,
-      config.isCommander ? "" : `usd<=5`,
-      "order:edhrec",
-    ].filter(Boolean).join(" ");
-
-    const padResults = await scryfallSearch(padQ);
+    const padQ = [`t:creature pow>=2`, colorFilter, formatFilter, "order:edhrec"].filter(Boolean).join(" ");
+    const padResults = await scryfallSearch(padQ, 3);
     let padded = 0;
     for (const card of padResults) {
       if (padded >= gap) break;
       if (usedNames.has(card.name)) continue;
       if (priceOf(card) > priceCap) continue;
-      selectedCards.push({ ...card, quantity: 1 });
+      const qty = config.isCommander ? 1 : Math.min(config.maxCopies, gap - padded);
+      selectedCards.push({ ...card, quantity: qty });
       usedNames.add(card.name);
-      padded++;
+      padded += qty;
     }
     slotSummary["threats"] = (slotSummary["threats"] ?? 0) + padded;
   }
 
-  // ── 5. Add lands — always fill to exact deck size ──
+  // ── 5. Lands — fill exactly to deckSize ──
   const nonLandCount = selectedCards.reduce((s, c) => s + c.quantity, 0);
   const landTarget = config.deckSize - nonLandCount;
-  const lands = buildLands(params.colors, Math.max(landTarget, 1), params.budget, priceCap);
+  const lands = buildLands(params.colors, Math.max(landTarget, 0));
   selectedCards.push(...lands);
   slotSummary["lands"] = lands.reduce((s, c) => s + c.quantity, 0);
 
-  // ── 6. Trim to exact deck size ──
+  // ── 6. Trim to exact deck size (safety net) ──
   let total = selectedCards.reduce((s, c) => s + c.quantity, 0);
   let i = selectedCards.length - 1;
   while (total > config.deckSize && i >= 0) {
@@ -468,24 +388,18 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
     i--;
   }
 
-  // ── 7. Render Arena/MTGO export ──
+  // ── 7. Render ──
   const lines: string[] = [];
-
   if (commanderCard && config.isCommander) {
     lines.push("Commander");
     lines.push(formatLine(commanderCard));
     lines.push("");
   }
-
   lines.push("Deck");
   for (const card of selectedCards) {
     if (commanderCard && card.name === commanderCard.name) continue;
     if (card.quantity > 0) lines.push(formatLine(card));
   }
 
-  return {
-    cards: selectedCards,
-    deckList: lines.join("\n"),
-    slotSummary,
-  };
+  return { cards: selectedCards, deckList: lines.join("\n"), slotSummary };
 }
