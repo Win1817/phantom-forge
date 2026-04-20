@@ -5,6 +5,9 @@
 import { buildDeckMath } from "./deckBuilder";
 import type { CardRole } from "./cardAnalytics";
 
+// Re-export so consumers never need to reach into deckBuilder directly
+export type { CollectionCard } from "./deckBuilder";
+
 // ── Re-export core analytics ──────────────────────────────────────────────────
 
 export { classifyRole, findRelatedCards, findCombos } from "./cardAnalytics";
@@ -42,7 +45,7 @@ export async function buildDeck(
   style: string,
   colors: string[],
   budget: string,
-  collectionCards?: import("./deckBuilder").CollectionCard[],
+  collectionCards?: CollectionCard[],
   useCollection?: boolean,
 ): Promise<BuiltDeck> {
   const result = await buildDeckMath({ format, style, colors, budget, collectionCards, useCollection });

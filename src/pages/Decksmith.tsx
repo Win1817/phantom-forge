@@ -10,11 +10,9 @@ import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { generateDeckNarrative, type DeckNarrative } from "@/lib/gemini";
-import { buildDeck, type BuiltDeck } from "@/lib/mtgmath";
-import type { CollectionCard } from "@/lib/deckBuilder";
+import { buildDeck, type BuiltDeck, type BuiltDeckCard, type CollectionCard } from "@/lib/mtgmath";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { getCardImage } from "@/lib/scryfall";
 
 const FORMATS = ["Standard", "Pioneer", "Modern", "Commander", "Pauper", "Casual"];
 const STYLES  = ["Aggro", "Control", "Midrange", "Combo", "Tempo", "Ramp"];
@@ -37,7 +35,7 @@ interface GeneratedResult {
   cardCount: number;
   roleBreakdown: Partial<Record<string, number>>;
   narrative: DeckNarrative;
-  cards: import("@/lib/mtgmath").BuiltDeckCard[];
+  cards: BuiltDeckCard[];
 }
 
 // Build progress steps
