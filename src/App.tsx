@@ -17,6 +17,7 @@ import Decksmith from "./pages/Decksmith.tsx";
 import Scanner from "./pages/Scanner.tsx";
 import Wishlist from "./pages/Wishlist.tsx";
 import Settings from "./pages/Settings.tsx";
+import SharedDeck from "./pages/SharedDeck.tsx";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="wishlist" element={<Wishlist />} />
             <Route path="settings" element={<Settings />} />
           </Route>
+          <Route path="/share/:token" element={<SharedDeck />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

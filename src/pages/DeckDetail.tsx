@@ -2,7 +2,8 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Loader2, Swords, Shield, Crown,
-  LayoutGrid, List, Download, Trash2, Plus, Search, X, CheckCircle2
+  LayoutGrid, List, Download, Trash2, Plus, Search, X, CheckCircle2,
+  Share2, Link2, Link2Off, Copy, Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,8 @@ interface Deck {
   colors: string[] | null;
   cover_image_url: string | null;
   created_at: string;
+  is_public: boolean;
+  share_token: string | null;
 }
 
 const MANA_COLOR: Record<string, string> = {
@@ -87,6 +90,8 @@ export default function DeckDetail() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [view, setView] = useState<"grid" | "list">("grid");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [sharingBusy, setSharingBusy] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // Owned scryfall IDs for cross-reference
   const [ownedIds, setOwnedIds] = useState<Set<string>>(new Set());
@@ -121,6 +126,31 @@ export default function DeckDetail() {
     const text = exportDeckText(deck.name, main, side);
     navigator.clipboard.writeText(text);
     toast.success("Deck list copied to clipboard");
+  };
+
+  const handleToggleShare = async () => {
+    if (!deck) return;
+    setSharingBusy(true);
+    const newPublic = !deck.is_public;
+    const { error } = await supabase
+      .from("decks")
+      .update({ is_public: newPublic })
+      .eq("id", deck.id);
+    if (error) { toast.error(error.message); setSharingBusy(false); return; }
+    setDeck((d) => d ? { ...d, is_public: newPublic } : d);
+    toast.success(newPublic ? "Deck is now public — anyone with the link can view it" : "Deck is now private");
+    setSharingBusy(false);
+    if (newPublic && deck.share_token) handleCopyLink(deck.share_token);
+  };
+
+  const handleCopyLink = (token?: string) => {
+    const t = token ?? deck?.share_token;
+    if (!t) return;
+    const url = `${window.location.origin}/share/${t}`;
+    navigator.clipboard.writeText(url);
+    setLinkCopied(true);
+    toast.success("Share link copied!");
+    setTimeout(() => setLinkCopied(false), 2500);
   };
 
   const handleDelete = async () => {
@@ -256,6 +286,31 @@ export default function DeckDetail() {
             <Button size="sm" variant={view === "list" ? "secondary" : "ghost"} className="rounded-none h-8 px-2.5 border-l border-border/60" onClick={() => setView("list")}><List className="h-3.5 w-3.5" /></Button>
           </div>
           <Button variant="outline" size="sm" className="border-border/60 h-8" onClick={handleExport}><Download className="mr-1.5 h-3.5 w-3.5" /> Export</Button>
+
+          {/* Share toggle */}
+          <Button
+            variant={deck?.is_public ? "default" : "outline"}
+            size="sm"
+            className={`h-8 gap-1.5 ${deck?.is_public ? "bg-primary/20 text-primary border-primary/40 hover:bg-primary/30" : "border-border/60"}`}
+            onClick={handleToggleShare}
+            disabled={sharingBusy}
+          >
+            {sharingBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
+            <span className="hidden sm:inline">{deck?.is_public ? "Shared" : "Share"}</span>
+          </Button>
+
+          {/* Copy link — only shown when public */}
+          {deck?.is_public && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 border-primary/40 text-primary hover:bg-primary/10"
+              onClick={() => handleCopyLink()}
+            >
+              {linkCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            </Button>
+          )}
+
           <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-destructive" onClick={() => setDeleteConfirmOpen(true)}><Trash2 className="h-3.5 w-3.5" /></Button>
         </div>
       </div>
