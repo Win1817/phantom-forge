@@ -3,12 +3,12 @@ alter table public.decks
   add column if not exists is_public boolean not null default false,
   add column if not exists share_token text unique;
 
--- Generate a unique share token for every deck (existing + future)
+-- Generate a unique share token using replace(gen_random_uuid()) — no encoding needed
 create or replace function public.generate_share_token()
 returns trigger language plpgsql as $$
 begin
   if new.share_token is null then
-    new.share_token := encode(gen_random_bytes(12), 'base64url');
+    new.share_token := replace(gen_random_uuid()::text, '-', '');
   end if;
   return new;
 end;
@@ -20,7 +20,7 @@ create trigger decks_share_token
 
 -- Back-fill tokens for existing decks
 update public.decks
-set share_token = encode(gen_random_bytes(12), 'base64url')
+set share_token = replace(gen_random_uuid()::text, '-', '')
 where share_token is null;
 
 -- Allow anyone to read public decks
