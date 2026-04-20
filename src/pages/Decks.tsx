@@ -293,7 +293,7 @@ export default function Decks() {
               deck={deck}
               onOpen={() => navigate(`/app/decks/${deck.id}`)}
               onExport={() => openExport(deck)}
-              onDelete={() => deleteDeck(deck.id, deck.name)}
+              onDelete={() => requestDelete(deck.id, deck.name)}
             />
           ))}
         </div>
