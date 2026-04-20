@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from "react";
 import {
   Trash2, Minus, Plus, Library, LayoutGrid, List,
-  SlidersHorizontal, X, ArrowUpDown, CheckSquare, Square, Layers
+  SlidersHorizontal, X, ArrowUpDown, CheckSquare, Square, Layers,
+  Upload, FileText, Check, HelpCircle, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,9 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import CardDetailModal from "@/components/CardDetailModal";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { searchCards } from "@/lib/scryfall";
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
 import { cn } from "@/lib/utils";
 
@@ -82,6 +86,13 @@ export default function Collection() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
 
+  // Bulk import
+  const [importOpen, setImportOpen]           = useState(false);
+  const [importText, setImportText]           = useState("");
+  const [showFormat, setShowFormat]           = useState(false);
+  const [importing, setImporting]             = useState(false);
+  const [importProgress, setImportProgress]   = useState({ current: 0, total: 0 });
+
   useEffect(() => { if (user) load(); }, [user]);
 
   const load = async () => {
@@ -92,6 +103,95 @@ export default function Collection() {
       .order("created_at", { ascending: false });
     setCards(data ?? []);
     setLoading(false);
+  };
+
+  const handleBulkImport = async () => {
+    if (!importText.trim() || !user) return;
+    setImporting(true);
+    setImportProgress({ current: 0, total: 0 });
+
+    // Parse lines: "4 Lightning Bolt" or "4 Lightning Bolt (M11) 149" or "Lightning Bolt x4"
+    const lines = importText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l && !/^(Deck|Sideboard|Commander)$/i.test(l));
+
+    const parsed: Array<{ name: string; quantity: number; set?: string; num?: string }> = [];
+    for (const line of lines) {
+      // Format: "4 Card Name (SET) 123" or "4 Card Name"
+      const m1 = line.match(/^(\d+)x?\s+(.+?)(?:\s+\(([A-Z0-9]+)\)\s+(\d+))?$/i);
+      // Format: "Card Name x4"
+      const m2 = line.match(/^(.+?)\s+x(\d+)$/i);
+      if (m1) {
+        parsed.push({ quantity: parseInt(m1[1]), name: m1[2].trim(), set: m1[3], num: m1[4] });
+      } else if (m2) {
+        parsed.push({ quantity: parseInt(m2[2]), name: m2[1].trim() });
+      } else if (line.match(/^[A-Za-z]/)) {
+        parsed.push({ quantity: 1, name: line });
+      }
+    }
+
+    if (!parsed.length) { toast.error("No valid card lines found"); setImporting(false); return; }
+    setImportProgress({ current: 0, total: parsed.length });
+
+    let added = 0, skipped = 0;
+    for (let i = 0; i < parsed.length; i++) {
+      const { name, quantity, set, num } = parsed[i];
+      setImportProgress({ current: i + 1, total: parsed.length });
+
+      try {
+        // Try Scryfall lookup
+        let card = null;
+        if (set && num) {
+          const r = await fetch(`https://api.scryfall.com/cards/${set.toLowerCase()}/${num}`);
+          if (r.ok) card = await r.json();
+        }
+        if (!card) {
+          const r = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
+          if (r.ok) card = await r.json();
+        }
+
+        // Check if already in collection
+        const { data: existing } = await supabase
+          .from("collection_cards")
+          .select("id, quantity")
+          .eq("user_id", user.id)
+          .eq("scryfall_id", card?.id ?? name)
+          .maybeSingle();
+
+        if (existing) {
+          await supabase.from("collection_cards")
+            .update({ quantity: existing.quantity + quantity })
+            .eq("id", existing.id);
+        } else {
+          await supabase.from("collection_cards").insert({
+            user_id: user.id,
+            scryfall_id: card?.id ?? "unknown",
+            card_name: card?.name ?? name,
+            set_code: card?.set ?? set ?? null,
+            set_name: card?.set_name ?? null,
+            collector_number: card?.collector_number ?? num ?? null,
+            rarity: card?.rarity ?? null,
+            mana_cost: card?.mana_cost ?? null,
+            type_line: card?.type_line ?? null,
+            colors: card?.colors ?? [],
+            cmc: card?.cmc ?? null,
+            image_url: card?.image_uris?.normal ?? card?.card_faces?.[0]?.image_uris?.normal ?? null,
+            price_usd: card?.prices?.usd ? Number(card.prices.usd) : null,
+            quantity,
+          });
+        }
+        added++;
+      } catch {
+        skipped++;
+      }
+    }
+
+    await load();
+    setImporting(false);
+    setImportOpen(false);
+    setImportText("");
+    toast.success(`${added} card${added !== 1 ? "s" : ""} added to collection${skipped ? ` (${skipped} skipped)` : ""}`);
   };
 
   const updateQty = async (id: string, delta: number) => {
@@ -239,6 +339,14 @@ export default function Collection() {
           </Button>
           <Button asChild className="bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90">
             <Link to="/app/search"><Plus className="mr-1.5 h-4 w-4" /> Add cards</Link>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-border/60"
+            onClick={() => setImportOpen(true)}
+          >
+            <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
           </Button>
         </div>
       </div>
@@ -583,6 +691,101 @@ export default function Collection() {
         onConfirm={bulkDelete}
         onCancel={() => setConfirmBulkOpen(false)}
       />
+
+      {/* ── Bulk Import Dialog ── */}
+      <Dialog open={importOpen} onOpenChange={(o) => { if (!importing) { setImportOpen(o); if (!o) setImportText(""); } }}>
+        <DialogContent className="max-w-lg border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="font-fantasy text-xl text-gradient-gold flex items-center gap-2">
+              <Upload className="h-5 w-5 text-primary" /> Import to Collection
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              Paste a card list and we'll add them to your grimoire.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-1">
+            {/* Format guide toggle */}
+            <button
+              type="button"
+              onClick={() => setShowFormat(v => !v)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <HelpCircle className="h-3.5 w-3.5" />
+              {showFormat ? "Hide" : "Show"} accepted formats
+            </button>
+
+            {showFormat && (
+              <div className="rounded-lg border border-border/50 bg-secondary/20 p-3 space-y-2 text-xs">
+                <p className="font-medium text-foreground uppercase tracking-wider text-[10px]">Accepted formats</p>
+                <div className="space-y-1 font-mono text-muted-foreground">
+                  <p className="text-primary/80">// Arena / MTGO export (recommended)</p>
+                  <p>4 Lightning Bolt (M11) 149</p>
+                  <p>1 Black Lotus (LEA) 233</p>
+                  <br />
+                  <p className="text-primary/80">// Simple list with quantity</p>
+                  <p>4 Lightning Bolt</p>
+                  <p>2 Counterspell</p>
+                  <br />
+                  <p className="text-primary/80">// Quantity after name</p>
+                  <p>Lightning Bolt x4</p>
+                  <br />
+                  <p className="text-primary/80">// Single copy (no quantity)</p>
+                  <p>Black Lotus</p>
+                </div>
+                <p className="text-muted-foreground/60 pt-1">
+                  Lines starting with <span className="font-mono">Deck</span>, <span className="font-mono">Sideboard</span>, or <span className="font-mono">Commander</span> are ignored.
+                </p>
+              </div>
+            )}
+
+            <Textarea
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              placeholder={`4 Lightning Bolt (M11) 149\n2 Counterspell (7ED) 69\n1 Sol Ring (C21) 263\n\nOr simply:\n4 Lightning Bolt\n2 Counterspell`}
+              className="min-h-[200px] font-mono text-xs bg-secondary/40 border-border/60 resize-none"
+              disabled={importing}
+            />
+
+            {importing && importProgress.total > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Adding cards to grimoire…</span>
+                  <span>{importProgress.current} / {importProgress.total}</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary to-primary-glow rounded-full transition-all duration-300"
+                    style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setImportOpen(false); setImportText(""); }}
+                disabled={importing}
+                className="px-4 py-2 rounded-md border border-border/60 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkImport}
+                disabled={importing || !importText.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-gradient-to-r from-primary to-primary-glow text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {importing
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Importing…</>
+                  : <><Upload className="h-4 w-4" /> Import cards</>
+                }
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

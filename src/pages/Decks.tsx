@@ -56,6 +56,7 @@ export default function Decks() {
   const [importFormat, setImportFormat] = useState("casual");
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
+  const [addToCollection, setAddToCollection] = useState(false);
   const [suggestingName, setSuggestingName] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportText, setExportText] = useState("");
@@ -257,45 +258,45 @@ Rules:
         if (insertErr) throw new Error(insertErr.message);
       }
 
-      // Auto-sync to collection: upsert each unique card by scryfall_id
-      const uniqueCards = Object.values(
-        cardInserts.reduce((acc, c) => {
-          if (c.scryfall_id === "unknown") return acc;
-          if (!acc[c.scryfall_id]) acc[c.scryfall_id] = { ...c, total: 0 };
-          acc[c.scryfall_id].total += c.quantity;
-          return acc;
-        }, {} as Record<string, typeof cardInserts[0] & { total: number }>)
-      );
-
-      for (const c of uniqueCards) {
-        const { data: existing } = await supabase
-          .from("collection_cards")
-          .select("id, quantity")
-          .eq("user_id", user.id)
-          .eq("scryfall_id", c.scryfall_id)
-          .maybeSingle();
-
-        if (existing) {
-          await supabase.from("collection_cards")
-            .update({ quantity: existing.quantity + c.total })
-            .eq("id", existing.id);
-        } else {
-          await supabase.from("collection_cards").insert({
-            user_id: user.id,
-            scryfall_id: c.scryfall_id,
-            card_name: c.card_name,
-            set_code: c.set_code ?? null,
-            image_url: c.image_url ?? null,
-            mana_cost: c.mana_cost ?? null,
-            cmc: c.cmc ?? null,
-            type_line: c.type_line ?? null,
-            colors: c.colors ?? [],
-            quantity: c.total,
-          });
+      // Optionally add to collection
+      if (addToCollection) {
+        const uniqueCards = Object.values(
+          cardInserts.reduce((acc, c) => {
+            if (c.scryfall_id === "unknown") return acc;
+            if (!acc[c.scryfall_id]) acc[c.scryfall_id] = { ...c, total: 0 };
+            acc[c.scryfall_id].total += c.quantity;
+            return acc;
+          }, {} as Record<string, typeof cardInserts[0] & { total: number }>)
+        );
+        for (const c of uniqueCards) {
+          const { data: existing } = await supabase
+            .from("collection_cards")
+            .select("id, quantity")
+            .eq("user_id", user.id)
+            .eq("scryfall_id", c.scryfall_id)
+            .maybeSingle();
+          if (existing) {
+            await supabase.from("collection_cards")
+              .update({ quantity: existing.quantity + c.total })
+              .eq("id", existing.id);
+          } else {
+            await supabase.from("collection_cards").insert({
+              user_id: user.id,
+              scryfall_id: c.scryfall_id,
+              card_name: c.card_name,
+              set_code: c.set_code ?? null,
+              image_url: c.image_url ?? null,
+              mana_cost: c.mana_cost ?? null,
+              cmc: c.cmc ?? null,
+              type_line: c.type_line ?? null,
+              colors: c.colors ?? [],
+              quantity: c.total,
+            });
+          }
         }
       }
 
-      toast.success(`"${deckName}" imported — ${cardInserts.length} cards added to deck & collection`);
+      toast.success(`"${deckName}" imported — ${cardInserts.length} cards added to deck${addToCollection ? " & collection" : ""}`);
       setImportOpen(false);
       setImportText("");
       setImportName("");
@@ -439,6 +440,25 @@ Rules:
                 </div>
               </div>
             )}
+
+            {/* Optional: also add to collection */}
+            <button
+              type="button"
+              onClick={() => setAddToCollection(v => !v)}
+              className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-all ${
+                addToCollection ? "border-primary/40 bg-primary/8" : "border-border/40 bg-secondary/20 hover:border-border/70"
+              }`}
+            >
+              <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors ${
+                addToCollection ? "border-primary bg-primary" : "border-border"
+              }`}>
+                {addToCollection && <Check className="h-3 w-3 text-primary-foreground" />}
+              </div>
+              <div>
+                <p className="text-sm font-medium">Also add cards to my Collection</p>
+                <p className="text-[11px] text-muted-foreground">Each card will be added to your inventory with correct quantities.</p>
+              </div>
+            </button>
 
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setImportOpen(false)} disabled={importing}>
