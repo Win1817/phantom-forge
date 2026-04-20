@@ -12,13 +12,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { explainCard, type AIExplanation } from "@/lib/gemini";
 import {
   classifyRole,
-  generateSimpleExplanation,
-  generateHowToUse,
   findRelatedCards,
   findCombos,
-  formatCombos,
   type CardRole,
-} from "@/lib/mtgmath";
+} from "@/lib/cardAnalytics";
 import { toast } from "sonner";
 
 interface Props {
@@ -84,13 +81,17 @@ const CardDetailModal = ({ cardId, siblingIds = [], onChangeCardId, onClose }: P
     setMathLoading(true);
     const run = async () => {
       const role    = classifyRole(card);
-      const simple  = generateSimpleExplanation(card, role);
-      const howToUse = generateHowToUse(card, role);
+      const simple  = card.oracle_text
+        ? `${card.name} is a ${role} card. ${card.oracle_text.split("\n")[0]}`
+        : `${card.name} is a ${role} card.`;
+      const howToUse = card.type_line?.toLowerCase().includes("creature")
+        ? `Play ${card.name} to apply pressure. Use it to ${role === "removal" ? "answer threats" : role === "ramp" ? "accelerate your mana" : "advance your game plan"}.`
+        : `Cast ${card.name} at the right moment to maximize value. Consider its interaction with your other spells.`;
       const [related, combosRaw] = await Promise.all([
         findRelatedCards(card, 5),
-        findCombos(card.name, 3),
+        findCombos(card.name),
       ]);
-      const combos = formatCombos(combosRaw);
+      const combos = combosRaw.slice(0, 3);
       const result: MathAnalysis = { role, simple, howToUse, related, combos };
       mathCache.set(card.id, result);
       setMath(result);

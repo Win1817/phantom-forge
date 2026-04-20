@@ -395,6 +395,26 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
         usedNames.add(card.name);
         filled += qty;
       }
+
+      // ── Fallback: if still short, use a broad creature query for this slot ──
+      if (filled < target) {
+        const fallbackQ = [
+          `t:creature`,
+          colorFilter,
+          formatFilter,
+          "order:edhrec",
+        ].filter(Boolean).join(" ");
+        const fallbackResults = await scryfallSearch(fallbackQ);
+        for (const card of fallbackResults) {
+          if (filled >= target) break;
+          if (usedNames.has(card.name)) continue;
+          if (priceOf(card) > priceCap) continue;
+          const qty = config.isCommander ? 1 : Math.min(config.maxCopies, target - filled);
+          selectedCards.push({ ...card, quantity: qty });
+          usedNames.add(card.name);
+          filled += qty;
+        }
+      }
     }
 
     slotSummary[slot.name] = filled;
@@ -428,10 +448,10 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
     slotSummary["threats"] = (slotSummary["threats"] ?? 0) + padded;
   }
 
-  // ── 5. Add lands ──
+  // ── 5. Add lands — always fill to exact deck size ──
   const nonLandCount = selectedCards.reduce((s, c) => s + c.quantity, 0);
   const landTarget = config.deckSize - nonLandCount;
-  const lands = buildLands(params.colors, Math.max(landTarget, config.landCount), params.budget, priceCap);
+  const lands = buildLands(params.colors, Math.max(landTarget, 1), params.budget, priceCap);
   selectedCards.push(...lands);
   slotSummary["lands"] = lands.reduce((s, c) => s + c.quantity, 0);
 

@@ -55,15 +55,8 @@ export function AppSidebar() {
             )
           }
         >
-          {({ isActive }) => (
-            <>
-              {isActive && (
-                <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r bg-primary shadow-[0_0_8px_hsl(var(--primary))]" />
-              )}
-              <item.icon className="h-4 w-4 shrink-0" />
-              {!collapsed && <span>{item.title}</span>}
-            </>
-          )}
+          <item.icon className="h-4 w-4 shrink-0" />
+          {!collapsed && <span>{item.title}</span>}
         </RouterNavLink>
       </SidebarMenuButton>
     </SidebarMenuItem>
