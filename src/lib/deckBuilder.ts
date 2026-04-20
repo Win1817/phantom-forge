@@ -242,27 +242,71 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
     }
   }
 
-  function matchesSlotOracle(card: CollectionCard, oracleQuery: string): boolean {
-    if (!card.oracle_text && !card.type_line) return false;
-    const text = `${card.oracle_text ?? ""} ${card.type_line ?? ""}`.toLowerCase();
-    const phrases = [...oracleQuery.matchAll(/o:"([^"]+)"/g)].map((m) => m[1].toLowerCase());
-    const typeTerms = [...oracleQuery.matchAll(/t:(\w+)/g)].map((m) => m[1].toLowerCase());
-    const hasPhraseMatch = phrases.length === 0 || phrases.some((p) => text.includes(p));
-    const hasTypeMatch = typeTerms.length === 0 || typeTerms.some((t) => text.includes(t));
-    return hasPhraseMatch && hasTypeMatch;
+  // Slot keyword hints for type-line matching (oracle_text not stored in collection)
+  const SLOT_TYPE_HINTS: Record<string, { types?: string[]; nameParts?: string[] }> = {
+    ramp:     { types: ["land"], nameParts: ["sol ring","mana crypt","signet","talisman","lotus","diamond","vault","monolith","dynamo","sphere","vessel","archive","hedron","compass","map","pilgrim","mystic","birds","llanowar","fyndhorn","elvish","cultivate","kodama","farseek","rampant","nature's lore","three visits","growth spiral"] },
+    draw:     { nameParts: ["rhystic","remora","skullclamp","henge","divining","crystal","brainstorm","ponder","preordain","opt","consider","windfall","wheel","fact or fiction","treasure cruise","dig through time","consecrated","ledger","toski","ohran","beast whisperer","guardian project"] },
+    removal:  { nameParts: ["swords","path to exile","doom blade","murder","terminate","dreadbore","anguished","assassin","chaos warp","generous gift","beast within","toxic deluge","damnation","blasphemous","cyclonic","abrupt","sweltering"] },
+    counter:  { types: ["instant"], nameParts: ["counterspell","negate","swan song","mana drain","force of will","force of negation","fierce","arcane denial","flusterstorm","pact"] },
+    threats:  { types: ["creature","planeswalker"] },
+    support:  { types: ["enchantment","artifact"], nameParts: ["smothering","anointed","parallel","hardened","primal vigor","mirari","mana reflection","zendikar resurgent"] },
+  };
+
+  function matchesSlot(card: CollectionCard, slotName: string): boolean {
+    const hints = SLOT_TYPE_HINTS[slotName];
+    if (!hints) return false;
+
+    const typeLine = (card.type_line ?? "").toLowerCase();
+    const cardName = card.card_name.toLowerCase();
+
+    // Name-based match (highest fidelity — covers well-known staples)
+    if (hints.nameParts?.some((p) => cardName.includes(p))) return true;
+
+    // Type-based match (broad — creatures go to threats, instants to counter, etc.)
+    if (hints.types?.some((t) => typeLine.includes(t))) {
+      // Exclude lands from non-ramp slots
+      if (slotName !== "ramp" && typeLine.includes("land")) return false;
+      // Only put creatures in threats if they're not better elsewhere
+      if (slotName === "threats") return typeLine.includes("creature") || typeLine.includes("planeswalker");
+      return true;
+    }
+
+    return false;
   }
 
   function colorMatches(card: CollectionCard): boolean {
+    // No color restriction — all cards allowed
     if (!colorId || params.colors.length === 0) return true;
     const cardColors = card.colors ?? [];
+    // Colorless cards (artifacts, lands) always fit any color identity
     if (cardColors.length === 0) return true;
+    // All card colors must be within the chosen color identity
     return cardColors.every((c) => colorId.includes(c));
   }
 
   // ── 1. Commander ──
   let commanderCard: (ScryfallCard & { quantity: number }) | null = null;
   if (config.isCommander) {
-    commanderCard = await pickCommander(params.colors, params.style, priceCap);
+    // Try collection first — pick a legendary creature that fits color identity
+    if (collectionMap.size > 0) {
+      for (const [, colCard] of collectionMap) {
+        if (!colCard.type_line) continue;
+        const tl = colCard.type_line.toLowerCase();
+        if (!tl.includes("legendary") || !tl.includes("creature")) continue;
+        if (!colorMatches(colCard)) continue;
+        commanderCard = {
+          id: colCard.scryfall_id, name: colCard.card_name,
+          set: colCard.set_code ?? "UNK", collector_number: colCard.collector_number ?? "0",
+          type_line: colCard.type_line ?? "", mana_cost: colCard.mana_cost ?? "",
+          cmc: colCard.cmc ?? 0, colors: colCard.colors ?? [], quantity: 1,
+        } as ScryfallCard & { quantity: number };
+        break;
+      }
+    }
+    // Fall back to Scryfall if no collection commander found
+    if (!commanderCard) {
+      commanderCard = await pickCommander(params.colors, params.style, priceCap);
+    }
     if (commanderCard) {
       selectedCards.push(commanderCard);
       usedNames.add(commanderCard.name);
@@ -291,7 +335,7 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
         if (filled >= target) break;
         if (usedNames.has(colCard.card_name)) continue;
         if (!colorMatches(colCard)) continue;
-        if (!matchesSlotOracle(colCard, slot.oracleQuery)) continue;
+        if (!matchesSlot(colCard, slot.name)) continue;
         const qty = config.isCommander ? 1 : Math.min(config.maxCopies, target - filled, colCard.quantity);
         selectedCards.push({
           id: colCard.scryfall_id, name: colCard.card_name,
