@@ -223,49 +223,7 @@ export default function Decksmith() {
 
       await supabase.from("deck_cards").insert(inserts);
 
-      // ── Sync to collection_cards ──────────────────────────────────────────
-      // Merge duplicates (same scryfall_id) summing quantities
-      const uniqueMap: Record<string, typeof inserts[0] & { total: number }> = {};
-      for (const c of inserts) {
-        if (c.scryfall_id === "unknown") continue;
-        if (!uniqueMap[c.scryfall_id]) uniqueMap[c.scryfall_id] = { ...c, total: 0 };
-        uniqueMap[c.scryfall_id].total += c.quantity;
-      }
-
-      for (const c of Object.values(uniqueMap)) {
-        const { data: existing } = await supabase
-          .from("collection_cards")
-          .select("id, quantity")
-          .eq("user_id", user.id)
-          .eq("scryfall_id", c.scryfall_id)
-          .maybeSingle();
-
-        if (existing) {
-          await supabase.from("collection_cards")
-            .update({ quantity: existing.quantity + c.total })
-            .eq("id", existing.id);
-        } else {
-          await supabase.from("collection_cards").insert({
-            user_id: user.id,
-            scryfall_id: c.scryfall_id,
-            card_name: c.card_name,
-            set_code: c.set_code,
-            set_name: (c as any).set_name ?? null,
-            collector_number: c.collector_number,
-            rarity: (c as any).rarity ?? null,
-            image_url: c.image_url,
-            mana_cost: c.mana_cost,
-            cmc: c.cmc,
-            type_line: c.type_line,
-            colors: c.colors,
-            price_usd: (c as any).price_usd ?? null,
-            quantity: c.total,
-          });
-        }
-      }
-      // ─────────────────────────────────────────────────────────────────────
-
-      toast.success(`"${generated.narrative.name}" saved — ${inserts.length} cards added to Decks & Collection`);
+      toast.success(`"${generated.narrative.name}" saved to Deck Workshop`);
       navigate(`/app/decks/${deck.id}`);
     } catch (e) {
       toast.error((e as Error).message);
