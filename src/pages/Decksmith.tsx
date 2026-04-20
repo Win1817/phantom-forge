@@ -14,7 +14,6 @@ import { buildDeck, type BuiltDeck } from "@/lib/mtgmath";
 import type { CollectionCard } from "@/lib/deckBuilder";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { parseDeckText } from "@/lib/deckImportExport";
 import { getCardImage } from "@/lib/scryfall";
 
 const FORMATS = ["Standard", "Pioneer", "Modern", "Commander", "Pauper", "Casual"];
@@ -38,6 +37,7 @@ interface GeneratedResult {
   cardCount: number;
   roleBreakdown: Partial<Record<string, number>>;
   narrative: DeckNarrative;
+  cards: import("@/lib/mtgmath").BuiltDeckCard[];
 }
 
 // Build progress steps
@@ -127,6 +127,7 @@ export default function Decksmith() {
         cardCount: built.cardCount,
         roleBreakdown: built.roleBreakdown,
         narrative,
+        cards: built.cards,
       });
     } catch (e) {
       toast.error((e as Error).message || "Generation failed");
@@ -172,7 +173,7 @@ export default function Decksmith() {
     if (!generated || !user) return;
     setSaving(true);
     try {
-      const parsed = parseDeckText(generated.deckList);
+      // Create the deck row
       const { data: deck, error: deckErr } = await supabase
         .from("decks")
         .insert({
@@ -180,31 +181,42 @@ export default function Decksmith() {
           name: generated.narrative.name,
           format: format.toLowerCase(),
           description: generated.narrative.description,
+          colors: selectedColors.length > 0 ? selectedColors : null,
         })
         .select().single();
       if (deckErr || !deck) throw new Error(deckErr?.message ?? "Failed to create deck");
 
-      const allLines = [
-        ...parsed.main.map((l) => ({ ...l, isCommander: false, isSideboard: false })),
-        ...parsed.sideboard.map((l) => ({ ...l, isCommander: false, isSideboard: true })),
-        ...(parsed.commander ? [{ ...parsed.commander, isCommander: true, isSideboard: false }] : []),
-      ];
+      // Use the full Scryfall card objects stored at build time — never re-parse text
+      const inserts = generated.cards
+        .filter((c) => c.quantity > 0)
+        .map((c) => {
+          // Resolve image from image_uris or card_faces
+          const image_url =
+            c.image_uris?.normal ??
+            c.image_uris?.large ??
+            c.image_uris?.small ??
+            c.card_faces?.[0]?.image_uris?.normal ??
+            c.card_faces?.[0]?.image_uris?.large ??
+            null;
 
-      const inserts = allLines.map((line) => ({
-        deck_id: deck.id,
-        scryfall_id: "unknown",
-        card_name: line.name,
-        quantity: line.quantity,
-        set_code: (line.set && line.set !== "UNK") ? line.set : null,
-        collector_number: line.collectorNumber ?? null,
-        image_url: null,
-        mana_cost: null,
-        cmc: null,
-        type_line: null,
-        colors: [] as string[],
-        is_commander: line.isCommander,
-        is_sideboard: line.isSideboard,
-      }));
+          return {
+            deck_id: deck.id,
+            scryfall_id: c.id && c.id !== "" ? c.id : "unknown",
+            card_name: c.name,
+            quantity: c.quantity,
+            set_code: c.set ?? null,
+            collector_number: c.collector_number ?? null,
+            image_url,
+            mana_cost: c.mana_cost ?? null,
+            cmc: c.cmc ?? null,
+            type_line: c.type_line ?? null,
+            colors: c.colors ?? [],
+            is_commander: c.is_commander ?? false,
+            is_sideboard: c.is_sideboard ?? false,
+          };
+        });
+
+      if (inserts.length === 0) throw new Error("No cards to save — deck list may be empty");
 
       const { error: insertErr } = await supabase.from("deck_cards").insert(inserts);
       if (insertErr) throw new Error(insertErr.message);

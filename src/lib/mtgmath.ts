@@ -1,14 +1,5 @@
 /**
  * mtgmath.ts — Public adapter for the math-first deck builder + card analysis helpers.
- *
- * Exports:
- *   buildDeck()               → Decksmith.tsx
- *   classifyRole()            → CardDetailModal.tsx
- *   findRelatedCards()        → CardDetailModal.tsx
- *   findCombos()              → CardDetailModal.tsx
- *   generateSimpleExplanation → CardDetailModal.tsx
- *   generateHowToUse()        → CardDetailModal.tsx
- *   formatCombos()            → CardDetailModal.tsx
  */
 
 import { buildDeckMath } from "./deckBuilder";
@@ -21,11 +12,29 @@ export type { CardRole } from "./cardAnalytics";
 
 // ── Deck builder adapter ──────────────────────────────────────────────────────
 
+export interface BuiltDeckCard {
+  id: string;
+  name: string;
+  set?: string;
+  collector_number?: string;
+  image_uris?: { normal?: string; large?: string; small?: string };
+  card_faces?: Array<{ image_uris?: { normal?: string; large?: string } }>;
+  mana_cost?: string;
+  cmc?: number;
+  type_line?: string;
+  colors?: string[];
+  quantity: number;
+  is_commander?: boolean;
+  is_sideboard?: boolean;
+}
+
 export interface BuiltDeck {
   deckList: string;
   cardCount: number;
   /** Slot name → card count, shown as badges in the UI */
   roleBreakdown: Partial<Record<string, number>>;
+  /** Full card objects with Scryfall data — use for saving to DB */
+  cards: BuiltDeckCard[];
 }
 
 export async function buildDeck(
@@ -41,14 +50,31 @@ export async function buildDeck(
     deckList: result.deckList,
     cardCount: result.cards.reduce((sum, c) => sum + c.quantity, 0),
     roleBreakdown: result.slotSummary,
+    cards: (() => {
+      // Parse commander name from deckList if present
+      const commanderMatch = result.deckList.match(/^Commander\n\d+ (.+)$/m);
+      const commanderName = commanderMatch?.[1]?.trim() ?? null;
+      return result.cards.map((c) => ({
+        id: c.id,
+        name: c.name,
+        set: c.set,
+        collector_number: c.collector_number,
+        image_uris: c.image_uris,
+        card_faces: c.card_faces,
+        mana_cost: c.mana_cost,
+        cmc: c.cmc,
+        type_line: c.type_line,
+        colors: c.colors,
+        quantity: c.quantity,
+        is_commander: commanderName ? c.name === commanderName : false,
+        is_sideboard: false,
+      }));
+    })(),
   };
 }
 
 // ── CardDetailModal helpers ───────────────────────────────────────────────────
 
-/**
- * Generate a plain-English one-liner from oracle text + role — no AI needed.
- */
 export function generateSimpleExplanation(
   card: { name: string; oracle_text?: string; type_line?: string },
   role: CardRole
@@ -72,9 +98,6 @@ export function generateSimpleExplanation(
   return `${card.name} is a ${card.type_line ?? "card"} that ${roleDesc[role] ?? "provides value"}.`;
 }
 
-/**
- * Generate a 1-sentence gameplay tip based on role — no AI needed.
- */
 export function generateHowToUse(
   _card: { name: string; type_line?: string },
   role: CardRole
@@ -94,10 +117,6 @@ export function generateHowToUse(
   return tips[role] ?? "Deploy at the moment that maximizes its impact.";
 }
 
-/**
- * Format raw combo results — findCombos() already returns string[],
- * this is a pass-through shim for CardDetailModal compatibility.
- */
 export function formatCombos(combos: string[]): string[] {
   return combos;
 }
