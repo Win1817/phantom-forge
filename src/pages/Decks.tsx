@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Plus, LayersIcon, Upload, Download, Copy, Check,
-  Trash2, Loader2, ChevronRight, Swords
+  Trash2, Loader2, ChevronRight, Swords, Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +56,7 @@ export default function Decks() {
   const [importFormat, setImportFormat] = useState("casual");
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
+  const [suggestingName, setSuggestingName] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportText, setExportText] = useState("");
   const [exportDeckName, setExportDeckName] = useState("");
@@ -148,6 +149,60 @@ export default function Decks() {
     a.download = `${exportDeckName.replace(/\s+/g, "_")}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const suggestDeckName = async () => {
+    if (!importText.trim()) { toast.error("Paste a deck list first so AI can analyse it"); return; }
+    setSuggestingName(true);
+    try {
+      const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!GEMINI_API_KEY) throw new Error("No Gemini key configured");
+
+      // Extract first 30 card names from the list for context
+      const cardLines = importText
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => /^\d+\s+/.test(l))
+        .slice(0, 30)
+        .join("\n");
+
+      const prompt = `You are an expert Magic: The Gathering player. Given this deck list, suggest ONE creative, thematic deck name that captures the strategy, theme, or key cards.
+
+Format: ${importFormat}
+Cards:
+${cardLines}
+
+Rules:
+- Return ONLY the deck name, nothing else
+- No quotes, no punctuation at the end
+- 2-5 words, evocative and flavourful
+- Examples: "Crimson Storm Aggro", "The Undying Tide", "Kessig Wolf Hunt"`;
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: { maxOutputTokens: 20, temperature: 0.9 },
+          }),
+        }
+      );
+      if (!res.ok) throw new Error("Gemini request failed");
+      const data = await res.json();
+      const name = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (name) {
+        setImportName(name);
+        toast.success(`AI suggested: "${name}"`);
+      } else {
+        throw new Error("No suggestion returned");
+      }
+    } catch (e) {
+      toast.error("Couldn't generate a name — try again or enter one manually");
+    } finally {
+      setSuggestingName(false);
+    }
   };
 
   const handleImport = async () => {
@@ -314,13 +369,37 @@ export default function Decks() {
           <div className="space-y-4 pt-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Deck name</Label>
-                <Input
-                  value={importName}
-                  onChange={(e) => setImportName(e.target.value)}
-                  placeholder="Auto-detect from list…"
-                  className="bg-secondary/40 border-border/60"
-                />
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Deck name</Label>
+                  <button
+                    type="button"
+                    onClick={suggestDeckName}
+                    disabled={suggestingName || !importText.trim()}
+                    className="flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {suggestingName
+                      ? <Loader2 className="h-3 w-3 animate-spin" />
+                      : <Sparkles className="h-3 w-3" />}
+                    {suggestingName ? "Thinking…" : "AI suggest"}
+                  </button>
+                </div>
+                <div className="relative">
+                  <Input
+                    value={importName}
+                    onChange={(e) => setImportName(e.target.value)}
+                    placeholder="Auto-detect from list…"
+                    className="bg-secondary/40 border-border/60 pr-8"
+                  />
+                  {importName && (
+                    <button
+                      type="button"
+                      onClick={() => setImportName("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <span className="text-xs">✕</span>
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">Format</Label>
