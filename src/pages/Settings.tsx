@@ -46,7 +46,7 @@ const Settings = () => {
     setUploading(true);
     try {
       const ext  = file.name.split(".").pop() ?? "jpg";
-      const path = `avatars/${user.id}.${ext}`;
+      const path = `${user.id}/avatar.${ext}`;
 
       const { error: uploadErr } = await supabase.storage
         .from("avatars")
