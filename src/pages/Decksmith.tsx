@@ -190,38 +190,24 @@ export default function Decksmith() {
         ...(parsed.commander ? [{ ...parsed.commander, isCommander: true, isSideboard: false }] : []),
       ];
 
-      const inserts = await Promise.all(
-        allLines.map(async (line) => {
-          let card = null;
-          try {
-            if (line.set && line.collectorNumber) {
-              const r = await fetch(`https://api.scryfall.com/cards/${line.set.toLowerCase()}/${line.collectorNumber}`);
-              if (r.ok) card = await r.json();
-            }
-          } catch {}
-          return {
-            deck_id: deck.id,
-            scryfall_id: card?.id ?? "unknown",
-            card_name: line.name,
-            quantity: line.quantity,
-            set_code: card?.set ?? line.set ?? null,
-            collector_number: card?.collector_number ?? line.collectorNumber ?? null,
-            image_url: card ? getCardImage(card) : null,
-            mana_cost: card?.mana_cost ?? null,
-            cmc: card?.cmc ?? null,
-            type_line: card?.type_line ?? null,
-            colors: card?.colors ?? [],
-            is_commander: line.isCommander,
-            is_sideboard: line.isSideboard,
-            // Extra fields for collection sync
-            set_name: card?.set_name ?? null,
-            rarity: card?.rarity ?? null,
-            price_usd: card?.prices?.usd ? Number(card.prices.usd) : null,
-          };
-        })
-      );
+      const inserts = allLines.map((line) => ({
+        deck_id: deck.id,
+        scryfall_id: "unknown",
+        card_name: line.name,
+        quantity: line.quantity,
+        set_code: (line.set && line.set !== "UNK") ? line.set : null,
+        collector_number: line.collectorNumber ?? null,
+        image_url: null,
+        mana_cost: null,
+        cmc: null,
+        type_line: null,
+        colors: [] as string[],
+        is_commander: line.isCommander,
+        is_sideboard: line.isSideboard,
+      }));
 
-      await supabase.from("deck_cards").insert(inserts);
+      const { error: insertErr } = await supabase.from("deck_cards").insert(inserts);
+      if (insertErr) throw new Error(insertErr.message);
 
       toast.success(`"${generated.narrative.name}" saved to Deck Workshop`);
       navigate(`/app/decks/${deck.id}`);

@@ -274,7 +274,35 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
     return false;
   }
 
-  function colorMatches(card: CollectionCard): boolean {
+  // Banned/not-legal cards per format (common offenders hardcoded for speed)
+  const FORMAT_BANNED: Record<string, Set<string>> = {
+    standard: new Set([
+      "sol ring","mana crypt","mana vault","dark confidant","braids, arisen nightmare",
+      "dockside extortionist","ragavan, nimble pilferer","animate dead","reanimate",
+      "entomb","buried alive","demonic tutor","vampiric tutor","necropotence",
+      "cyclonic rift","force of will","mana drain","rhystic study","mystic remora",
+      "jeweled lotus","lotus petal","chrome mox","mox diamond","mox opal","lion's eye diamond",
+      "grim monolith","basalt monolith","thran dynamo","blightsteel colossus",
+      "ulamog, the ceaseless hunger","emrakul, the promised end","kozilek, butcher of truth",
+      "dualcaster mage","wheel of fortune","underworld breach","bolas's citadel",
+      "aetherflux reservoir","orcish bowmasters","opposition agent","dauthi voidwalker",
+      "deadly rollick","fierce guardianship","deflecting swat","flawless maneuver",
+    ]),
+    pioneer: new Set([
+      "sol ring","mana crypt","mana vault","dark confidant","demonic tutor","vampiric tutor",
+      "necropotence","wheel of fortune","mana drain","force of will","brainstorm",
+      "ponder","preordain","gitaxian probe","sensei's divining top","skullclamp",
+    ]),
+    pauper: new Set([
+      "sol ring","mana crypt","mana vault","dark confidant","demonic tutor","vampiric tutor",
+    ]),
+  };
+
+  function isLegalInFormat(cardName: string): boolean {
+    const banned = FORMAT_BANNED[params.format.toLowerCase()];
+    if (!banned) return true; // Commander/Casual/Modern — no hardcoded ban list
+    return !banned.has(cardName.toLowerCase());
+  }
     // No color restriction — all cards allowed
     if (!colorId || params.colors.length === 0) return true;
     const cardColors = card.colors ?? [];
@@ -294,6 +322,7 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
         const tl = colCard.type_line.toLowerCase();
         if (!tl.includes("legendary") || !tl.includes("creature")) continue;
         if (!colorMatches(colCard)) continue;
+        if (!isLegalInFormat(colCard.card_name)) continue;
         commanderCard = {
           id: colCard.scryfall_id, name: colCard.card_name,
           set: colCard.set_code ?? "UNK", collector_number: colCard.collector_number ?? "0",
@@ -335,6 +364,7 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
         if (filled >= target) break;
         if (usedNames.has(colCard.card_name)) continue;
         if (!colorMatches(colCard)) continue;
+        if (!isLegalInFormat(colCard.card_name)) continue;
         if (!matchesSlot(colCard, slot.name)) continue;
         const qty = config.isCommander ? 1 : Math.min(config.maxCopies, target - filled, colCard.quantity);
         selectedCards.push({
