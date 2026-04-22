@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Sparkles, Download, Copy, Check, Loader2, Wand2, Zap, Library, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,6 +45,8 @@ type BuildStep = "idle" | "thinking" | "resolving" | "done";
 export default function Decksmith() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const navState = location.state as { useCollection?: boolean; storageType?: "vault" | "arcane" } | null;
   const [format, setFormat]               = useState("Commander");
   const [style, setStyle]                 = useState("Midrange");
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
@@ -59,7 +61,8 @@ export default function Decksmith() {
   const [lastGenerated, setLastGenerated] = useState<number>(0);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const COOLDOWN_MS = 10_000;
-  const [useCollection, setUseCollection]   = useState(false);
+  const [useCollection, setUseCollection]   = useState(navState?.useCollection ?? false);
+  const [collectionStorageType, setCollectionStorageType] = useState<"vault" | "arcane" | "all">(navState?.storageType ?? "all");
   const [collection, setCollection]         = useState<CollectionCard[]>([]);
   const [collectionLoaded, setCollectionLoaded] = useState(false);
   const [collectionCount, setCollectionCount]   = useState(0);
@@ -79,17 +82,22 @@ export default function Decksmith() {
   useEffect(() => {
     if (!useCollection || collectionLoaded || !user) return;
     (async () => {
-      const { data } = await supabase
+      let query = supabase
         .from("collection_cards")
-        .select("scryfall_id, card_name, set_code, collector_number, mana_cost, type_line, colors, cmc, quantity")
+        .select("scryfall_id, card_name, set_code, collector_number, mana_cost, type_line, colors, cmc, quantity, storage_type")
         .order("card_name");
+      // Filter by storage type if coming from Vault or Arcane tab
+      if (collectionStorageType !== "all") {
+        query = query.eq("storage_type", collectionStorageType);
+      }
+      const { data } = await query;
       if (data) {
         setCollection(data as CollectionCard[]);
         setCollectionCount(data.length);
         setCollectionLoaded(true);
       }
     })();
-  }, [useCollection, collectionLoaded, user]);
+  }, [useCollection, collectionLoaded, user, collectionStorageType]);
 
   const toggleColor = (c: string) =>
     setSelectedColors((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]);
@@ -352,12 +360,14 @@ export default function Decksmith() {
             </div>
             <div className="flex-1 min-w-0">
               <p className={`text-sm font-medium ${useCollection ? "text-foreground" : "text-muted-foreground"}`}>
-                Forge from my collection
+                Forge from {collectionStorageType === "vault" ? "Vault" : collectionStorageType === "arcane" ? "Arcane" : "my collection"}
               </p>
               <p className="text-[11px] text-muted-foreground/70 leading-tight">
                 {useCollection && collectionLoaded
-                  ? `Prioritising ${collectionCount} cards you own — fills gaps from Scryfall`
-                  : "Prioritise cards you already own before pulling from Scryfall"}
+                  ? `Prioritising ${collectionCount} ${collectionStorageType !== "all" ? collectionStorageType : ""} cards — fills gaps from Scryfall`
+                  : collectionStorageType !== "all"
+                    ? `Prioritise your ${collectionStorageType === "vault" ? "physical" : "digital"} cards before pulling from Scryfall`
+                    : "Prioritise cards you already own before pulling from Scryfall"}
               </p>
             </div>
             {/* Toggle pill */}

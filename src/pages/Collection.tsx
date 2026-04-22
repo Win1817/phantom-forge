@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import {
   Trash2, Minus, Plus, Library, LayoutGrid, List,
   SlidersHorizontal, X, ArrowUpDown, CheckSquare, Square,
-  Upload, HelpCircle, Loader2, Sparkles, Package, Monitor
+  Upload, HelpCircle, Loader2, Sparkles, Package, Wand2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import CardDetailModal from "@/components/CardDetailModal";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -82,6 +82,7 @@ type ViewMode = "grid" | "list";
 
 export default function Collection() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [cards, setCards]     = useState<CollectionCard[]>([]);
   const [filter, setFilter]   = useState("");
   const [loading, setLoading] = useState(true);
@@ -320,30 +321,31 @@ export default function Collection() {
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div className="flex flex-col gap-3">
         <div>
           <h1 className="font-fantasy text-3xl font-bold text-gradient-gold md:text-4xl">Your Grimoire</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {totalCards.toLocaleString()} cards · ${totalValue.toFixed(2)} est. value · {cards.length} unique
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" size="sm" className="border-border/60" onClick={() => setShowStats(v => !v)}>
+        {/* Toolbar — wraps cleanly on mobile */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" className="border-border/60 h-8" onClick={() => setShowStats(v => !v)}>
             {showStats ? "Hide stats" : "Show stats"}
           </Button>
           <Button
             variant={selectMode ? "secondary" : "outline"} size="sm"
-            className={cn("border-border/60 gap-1.5", selectMode && "border-primary/50 text-primary")}
+            className={cn("border-border/60 gap-1.5 h-8", selectMode && "border-primary/50 text-primary")}
             onClick={toggleSelectMode}
           >
             <CheckSquare className="h-3.5 w-3.5" />
             {selectMode ? "Cancel" : "Select"}
           </Button>
-          <Button asChild className="bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90">
-            <Link to="/app/search"><Plus className="mr-1.5 h-4 w-4" /> Add cards</Link>
-          </Button>
-          <Button variant="outline" size="sm" className="border-border/60" onClick={() => setImportOpen(true)}>
+          <Button variant="outline" size="sm" className="border-border/60 h-8" onClick={() => setImportOpen(true)}>
             <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
+          </Button>
+          <Button asChild size="sm" className="h-8 bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90">
+            <Link to="/app/search"><Plus className="mr-1.5 h-3.5 w-3.5" /> Add cards</Link>
           </Button>
         </div>
       </div>
@@ -393,6 +395,45 @@ export default function Collection() {
           );
         })}
       </div>
+
+      {/* ── Forge from this collection ─── */}
+      {storageTab !== "all" && (
+        <div className={cn(
+          "flex items-center justify-between gap-3 rounded-xl border p-3 transition-all",
+          storageTab === "vault"
+            ? "border-mana-green/30 bg-mana-green/5"
+            : "border-accent/30 bg-accent/5"
+        )}>
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={cn(
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+              storageTab === "vault" ? "bg-mana-green/15 text-mana-green" : "bg-accent/15 text-accent"
+            )}>
+              <Wand2 className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium leading-tight">
+                Forge a deck from {storageTab === "vault" ? "Vault" : "Arcane"}
+              </p>
+              <p className="text-[11px] text-muted-foreground/70 leading-tight">
+                AI Decksmith will prioritise your {storageTab === "vault" ? "physical" : "digital"} cards
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate("/app/decksmith", { state: { useCollection: true, storageType: storageTab } })}
+            className={cn(
+              "shrink-0 flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all",
+              storageTab === "vault"
+                ? "bg-mana-green/15 text-mana-green hover:bg-mana-green/25 ring-1 ring-mana-green/30"
+                : "bg-accent/15 text-accent hover:bg-accent/25 ring-1 ring-accent/30"
+            )}
+          >
+            <Wand2 className="h-3.5 w-3.5" />
+            Forge
+          </button>
+        </div>
+      )}
 
       {/* Bulk action bar */}
       {selectMode && (
