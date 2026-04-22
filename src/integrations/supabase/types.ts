@@ -33,6 +33,7 @@ export type Database = {
           scryfall_id: string
           set_code: string | null
           set_name: string | null
+          storage_type: string
           type_line: string | null
           updated_at: string
           user_id: string
@@ -55,6 +56,7 @@ export type Database = {
           scryfall_id: string
           set_code?: string | null
           set_name?: string | null
+          storage_type?: string
           type_line?: string | null
           updated_at?: string
           user_id: string
@@ -77,6 +79,7 @@ export type Database = {
           scryfall_id?: string
           set_code?: string | null
           set_name?: string | null
+          storage_type?: string
           type_line?: string | null
           updated_at?: string
           user_id?: string

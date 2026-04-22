@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo } from "react";
 import {
   Trash2, Minus, Plus, Library, LayoutGrid, List,
-  SlidersHorizontal, X, ArrowUpDown, CheckSquare, Square, Layers,
-  Upload, FileText, Check, HelpCircle, Loader2
+  SlidersHorizontal, X, ArrowUpDown, CheckSquare, Square,
+  Upload, HelpCircle, Loader2, Sparkles, Package, Monitor
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,9 +16,12 @@ import CardDetailModal from "@/components/CardDetailModal";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { searchCards } from "@/lib/scryfall";
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
 import { cn } from "@/lib/utils";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type StorageType = "arcane" | "vault";
 
 interface CollectionCard {
   id: string;
@@ -33,13 +36,27 @@ interface CollectionCard {
   colors: string[] | null;
   type_line: string | null;
   cmc: number | null;
+  storage_type: StorageType;
 }
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const STORAGE_TABS: { key: "all" | StorageType; label: string; icon: React.ElementType; desc: string }[] = [
+  { key: "all",    label: "All",    icon: Library,  desc: "Every card in your grimoire" },
+  { key: "arcane", label: "Arcane", icon: Sparkles, desc: "Digital · Arena / MTGO / Online" },
+  { key: "vault",  label: "Vault",  icon: Package,  desc: "Physical · Cards you own in hand" },
+];
+
+const STORAGE_BADGE: Record<StorageType, { label: string; cls: string }> = {
+  arcane: { label: "Arcane", cls: "border-accent/50 text-accent" },
+  vault:  { label: "Vault",  cls: "border-mana-green/50 text-mana-green" },
+};
+
 const RARITY_CLASS: Record<string, string> = {
-  common: "border-rarity-common/40 text-rarity-common",
+  common:   "border-rarity-common/40 text-rarity-common",
   uncommon: "border-rarity-uncommon/50 text-rarity-uncommon",
-  rare: "border-rarity-rare/60 text-rarity-rare",
-  mythic: "border-rarity-mythic/60 text-rarity-mythic",
+  rare:     "border-rarity-rare/60 text-rarity-rare",
+  mythic:   "border-rarity-mythic/60 text-rarity-mythic",
 };
 
 const MANA_COLORS = [
@@ -58,26 +75,30 @@ const SORT_OPTIONS = [
   { value: "price",    label: "Price" },
   { value: "quantity", label: "Quantity" },
 ];
-
 type SortKey = "added" | "name" | "cmc" | "price" | "quantity";
 type ViewMode = "grid" | "list";
 
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export default function Collection() {
   const { user } = useAuth();
-  const [cards, setCards]       = useState<CollectionCard[]>([]);
-  const [filter, setFilter]     = useState("");
-  const [loading, setLoading]   = useState(true);
-  const [openId, setOpenId]     = useState<string | null>(null);
-  const [view, setView]         = useState<ViewMode>("grid");
+  const [cards, setCards]     = useState<CollectionCard[]>([]);
+  const [filter, setFilter]   = useState("");
+  const [loading, setLoading] = useState(true);
+  const [openId, setOpenId]   = useState<string | null>(null);
+  const [view, setView]       = useState<ViewMode>("grid");
   const [showFilters, setShowFilters] = useState(false);
   const [showStats, setShowStats]     = useState(false);
+
+  // Storage type tab
+  const [storageTab, setStorageTab] = useState<"all" | StorageType>("all");
 
   // Filters
   const [colorFilter, setColorFilter]   = useState<string[]>([]);
   const [rarityFilter, setRarityFilter] = useState<string[]>([]);
   const [foilFilter, setFoilFilter]     = useState<boolean | null>(null);
-  const [cmcMin, setCmcMin]             = useState<string>("");
-  const [cmcMax, setCmcMax]             = useState<string>("");
+  const [cmcMin, setCmcMin]             = useState("");
+  const [cmcMax, setCmcMax]             = useState("");
   const [sortKey, setSortKey]           = useState<SortKey>("added");
 
   // Bulk select
@@ -87,11 +108,15 @@ export default function Collection() {
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
 
   // Bulk import
-  const [importOpen, setImportOpen]           = useState(false);
-  const [importText, setImportText]           = useState("");
-  const [showFormat, setShowFormat]           = useState(false);
-  const [importing, setImporting]             = useState(false);
-  const [importProgress, setImportProgress]   = useState({ current: 0, total: 0 });
+  const [importOpen, setImportOpen]         = useState(false);
+  const [importText, setImportText]         = useState("");
+  const [importStorage, setImportStorage]   = useState<StorageType>("vault");
+  const [showFormat, setShowFormat]         = useState(false);
+  const [importing, setImporting]           = useState(false);
+  const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
+
+  // Moving storage type
+  const [movingId, setMovingId] = useState<string | null>(null);
 
   useEffect(() => { if (user) load(); }, [user]);
 
@@ -99,36 +124,42 @@ export default function Collection() {
     setLoading(true);
     const { data } = await supabase
       .from("collection_cards")
-      .select("id, scryfall_id, card_name, set_name, rarity, image_url, quantity, price_usd, foil, colors, type_line, cmc")
+      .select("id, scryfall_id, card_name, set_name, rarity, image_url, quantity, price_usd, foil, colors, type_line, cmc, storage_type")
       .order("created_at", { ascending: false });
-    setCards(data ?? []);
+    setCards((data ?? []).map(c => ({ ...c, storage_type: (c.storage_type ?? "vault") as StorageType })));
     setLoading(false);
   };
 
+  // ── Storage type switcher per card ─────────────────────────────────────────
+  const switchStorage = async (id: string, to: StorageType) => {
+    setMovingId(id);
+    setCards(prev => prev.map(c => c.id === id ? { ...c, storage_type: to } : c));
+    const { error } = await supabase.from("collection_cards").update({ storage_type: to }).eq("id", id);
+    if (error) {
+      toast.error("Failed to update card location");
+      load(); // revert
+    } else {
+      toast.success(`Moved to ${to === "arcane" ? "Arcane ✦ Digital" : "Vault ✦ Physical"}`);
+    }
+    setMovingId(null);
+  };
+
+  // ── Bulk import ────────────────────────────────────────────────────────────
   const handleBulkImport = async () => {
     if (!importText.trim() || !user) return;
     setImporting(true);
     setImportProgress({ current: 0, total: 0 });
 
-    // Parse lines: "4 Lightning Bolt" or "4 Lightning Bolt (M11) 149" or "Lightning Bolt x4"
-    const lines = importText
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l && !/^(Deck|Sideboard|Commander)$/i.test(l));
+    const lines = importText.split("\n").map(l => l.trim())
+      .filter(l => l && !/^(Deck|Sideboard|Commander)$/i.test(l));
 
     const parsed: Array<{ name: string; quantity: number; set?: string; num?: string }> = [];
     for (const line of lines) {
-      // Format: "4 Card Name (SET) 123" or "4 Card Name"
       const m1 = line.match(/^(\d+)x?\s+(.+?)(?:\s+\(([A-Z0-9]+)\)\s+(\d+))?$/i);
-      // Format: "Card Name x4"
       const m2 = line.match(/^(.+?)\s+x(\d+)$/i);
-      if (m1) {
-        parsed.push({ quantity: parseInt(m1[1]), name: m1[2].trim(), set: m1[3], num: m1[4] });
-      } else if (m2) {
-        parsed.push({ quantity: parseInt(m2[2]), name: m2[1].trim() });
-      } else if (line.match(/^[A-Za-z]/)) {
-        parsed.push({ quantity: 1, name: line });
-      }
+      if (m1)      parsed.push({ quantity: parseInt(m1[1]), name: m1[2].trim(), set: m1[3], num: m1[4] });
+      else if (m2) parsed.push({ quantity: parseInt(m2[2]), name: m2[1].trim() });
+      else if (line.match(/^[A-Za-z]/)) parsed.push({ quantity: 1, name: line });
     }
 
     if (!parsed.length) { toast.error("No valid card lines found"); setImporting(false); return; }
@@ -138,9 +169,7 @@ export default function Collection() {
     for (let i = 0; i < parsed.length; i++) {
       const { name, quantity, set, num } = parsed[i];
       setImportProgress({ current: i + 1, total: parsed.length });
-
       try {
-        // Try Scryfall lookup
         let card = null;
         if (set && num) {
           const r = await fetch(`https://api.scryfall.com/cards/${set.toLowerCase()}/${num}`);
@@ -150,19 +179,12 @@ export default function Collection() {
           const r = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
           if (r.ok) card = await r.json();
         }
-
-        // Check if already in collection
-        const { data: existing } = await supabase
-          .from("collection_cards")
-          .select("id, quantity")
-          .eq("user_id", user.id)
-          .eq("scryfall_id", card?.id ?? name)
-          .maybeSingle();
+        const { data: existing } = await supabase.from("collection_cards")
+          .select("id, quantity").eq("user_id", user.id)
+          .eq("scryfall_id", card?.id ?? name).eq("storage_type", importStorage).maybeSingle();
 
         if (existing) {
-          await supabase.from("collection_cards")
-            .update({ quantity: existing.quantity + quantity })
-            .eq("id", existing.id);
+          await supabase.from("collection_cards").update({ quantity: existing.quantity + quantity }).eq("id", existing.id);
         } else {
           await supabase.from("collection_cards").insert({
             user_id: user.id,
@@ -179,94 +201,75 @@ export default function Collection() {
             image_url: card?.image_uris?.normal ?? card?.card_faces?.[0]?.image_uris?.normal ?? null,
             price_usd: card?.prices?.usd ? Number(card.prices.usd) : null,
             quantity,
+            storage_type: importStorage,
           });
         }
         added++;
-      } catch {
-        skipped++;
-      }
+      } catch { skipped++; }
     }
 
     await load();
     setImporting(false);
     setImportOpen(false);
     setImportText("");
-    toast.success(`${added} card${added !== 1 ? "s" : ""} added to collection${skipped ? ` (${skipped} skipped)` : ""}`);
+    toast.success(`${added} card${added !== 1 ? "s" : ""} added to ${importStorage === "arcane" ? "Arcane" : "Vault"}${skipped ? ` (${skipped} skipped)` : ""}`);
   };
 
+  // ── Card operations ────────────────────────────────────────────────────────
   const updateQty = async (id: string, delta: number) => {
-    const card = cards.find((c) => c.id === id);
+    const card = cards.find(c => c.id === id);
     if (!card) return;
     const next = Math.max(0, card.quantity + delta);
     if (next === 0) return remove(id);
-    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, quantity: next } : c)));
+    setCards(prev => prev.map(c => c.id === id ? { ...c, quantity: next } : c));
     await supabase.from("collection_cards").update({ quantity: next }).eq("id", id);
   };
 
   const remove = async (id: string) => {
-    setCards((prev) => prev.filter((c) => c.id !== id));
+    setCards(prev => prev.filter(c => c.id !== id));
     const { error } = await supabase.from("collection_cards").delete().eq("id", id);
     if (error) toast.error(error.message);
   };
 
-  // ── Bulk select helpers ───────────────────────────────────────────────────
-  const toggleSelectMode = () => {
-    setSelectMode((v) => !v);
-    setSelected(new Set());
-  };
-
-  const toggleCard = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const selectAll = () => {
-    setSelected(new Set(filtered.map((c) => c.id)));
-  };
-
+  // ── Bulk select ────────────────────────────────────────────────────────────
+  const toggleSelectMode = () => { setSelectMode(v => !v); setSelected(new Set()); };
+  const toggleCard = (id: string) => setSelected(prev => {
+    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next;
+  });
+  const selectAll = () => setSelected(new Set(filtered.map(c => c.id)));
   const clearSelection = () => setSelected(new Set());
 
   const bulkDelete = async () => {
     setBulkDeleting(true);
     const ids = [...selected];
-    // Delete in one round-trip using .in()
-    const { error } = await supabase
-      .from("collection_cards")
-      .delete()
-      .in("id", ids);
-    if (error) {
-      toast.error(error.message);
-    } else {
-      setCards((prev) => prev.filter((c) => !ids.includes(c.id)));
-      toast.success(`Removed ${ids.length} card${ids.length !== 1 ? "s" : ""} from your collection`);
-      setSelected(new Set());
-      setSelectMode(false);
+    const { error } = await supabase.from("collection_cards").delete().in("id", ids);
+    if (error) { toast.error(error.message); }
+    else {
+      setCards(prev => prev.filter(c => !ids.includes(c.id)));
+      toast.success(`Removed ${ids.length} card${ids.length !== 1 ? "s" : ""}`);
+      setSelected(new Set()); setSelectMode(false);
     }
-    setBulkDeleting(false);
-    setConfirmBulkOpen(false);
+    setBulkDeleting(false); setConfirmBulkOpen(false);
   };
 
-  const toggleColor   = (c: string) => setColorFilter((p) => p.includes(c) ? p.filter((x) => x !== c) : [...p, c]);
-  const toggleRarity  = (r: string) => setRarityFilter((p) => p.includes(r) ? p.filter((x) => x !== r) : [...p, r]);
+  const toggleColor  = (c: string) => setColorFilter(p => p.includes(c) ? p.filter(x => x !== c) : [...p, c]);
+  const toggleRarity = (r: string) => setRarityFilter(p => p.includes(r) ? p.filter(x => x !== r) : [...p, r]);
+  const activeFilterCount = colorFilter.length + rarityFilter.length + (foilFilter !== null ? 1 : 0) + (cmcMin ? 1 : 0) + (cmcMax ? 1 : 0);
+  const clearFilters = () => { setColorFilter([]); setRarityFilter([]); setFoilFilter(null); setCmcMin(""); setCmcMax(""); setFilter(""); };
 
-  const activeFilterCount = colorFilter.length + rarityFilter.length +
-    (foilFilter !== null ? 1 : 0) + (cmcMin ? 1 : 0) + (cmcMax ? 1 : 0);
-
+  // ── Filtered + sorted list ─────────────────────────────────────────────────
   const filtered = useMemo(() => {
-    let list = cards.filter((c) => {
+    let list = cards.filter(c => {
+      if (storageTab !== "all" && c.storage_type !== storageTab) return false;
       if (filter && !c.card_name.toLowerCase().includes(filter.toLowerCase())) return false;
-      if (colorFilter.length && !colorFilter.some((col) => c.colors?.includes(col))) return false;
+      if (colorFilter.length && !colorFilter.some(col => c.colors?.includes(col))) return false;
       if (rarityFilter.length && !rarityFilter.includes(c.rarity ?? "")) return false;
       if (foilFilter !== null && c.foil !== foilFilter) return false;
       if (cmcMin && (c.cmc ?? 0) < Number(cmcMin)) return false;
       if (cmcMax && (c.cmc ?? 0) > Number(cmcMax)) return false;
       return true;
     });
-    list = [...list].sort((a, b) => {
+    return [...list].sort((a, b) => {
       switch (sortKey) {
         case "name":     return a.card_name.localeCompare(b.card_name);
         case "cmc":      return (a.cmc ?? 0) - (b.cmc ?? 0);
@@ -275,45 +278,45 @@ export default function Collection() {
         default:         return 0;
       }
     });
-    return list;
-  }, [cards, filter, colorFilter, rarityFilter, foilFilter, cmcMin, cmcMax, sortKey]);
+  }, [cards, storageTab, filter, colorFilter, rarityFilter, foilFilter, cmcMin, cmcMax, sortKey]);
 
-  const totalCards = cards.reduce((s, c) => s + c.quantity, 0);
-  const totalValue = cards.reduce((s, c) => s + Number(c.price_usd ?? 0) * c.quantity, 0);
+  // ── Stats ──────────────────────────────────────────────────────────────────
+  const arcaneCards = cards.filter(c => c.storage_type === "arcane");
+  const vaultCards  = cards.filter(c => c.storage_type === "vault");
+  const totalCards  = cards.reduce((s, c) => s + c.quantity, 0);
+  const totalValue  = cards.reduce((s, c) => s + Number(c.price_usd ?? 0) * c.quantity, 0);
+  const arcaneValue = arcaneCards.reduce((s, c) => s + Number(c.price_usd ?? 0) * c.quantity, 0);
+  const vaultValue  = vaultCards.reduce((s, c) => s + Number(c.price_usd ?? 0) * c.quantity, 0);
 
   const selectedValue = [...selected].reduce((s, id) => {
-    const c = cards.find((x) => x.id === id);
+    const c = cards.find(x => x.id === id);
     return s + Number(c?.price_usd ?? 0) * (c?.quantity ?? 1);
   }, 0);
 
-  // Stats
   const cmcBuckets = useMemo(() => {
     const b: Record<string, number> = {};
-    cards.forEach((c) => {
+    filtered.forEach(c => {
       const key = c.cmc == null ? "?" : c.cmc >= 7 ? "7+" : String(Math.floor(c.cmc));
       b[key] = (b[key] ?? 0) + c.quantity;
     });
-    return ["0","1","2","3","4","5","6","7+","?"].filter((k) => b[k]).map((k) => ({ cmc: k, count: b[k] }));
-  }, [cards]);
+    return ["0","1","2","3","4","5","6","7+","?"].filter(k => b[k]).map(k => ({ cmc: k, count: b[k] }));
+  }, [filtered]);
 
   const colorData = useMemo(() => {
     const t: Record<string, number> = {};
-    cards.forEach((c) => (c.colors ?? []).forEach((col) => { t[col] = (t[col] ?? 0) + c.quantity; }));
+    filtered.forEach(c => (c.colors ?? []).forEach(col => { t[col] = (t[col] ?? 0) + c.quantity; }));
     return Object.entries(t).map(([name, value]) => ({ name, value, fill: MANA_HEX[name] ?? "#888" }));
-  }, [cards]);
+  }, [filtered]);
 
   const rarityData = useMemo(() => {
     const t: Record<string, number> = {};
-    cards.forEach((c) => { t[c.rarity ?? "unknown"] = (t[c.rarity ?? "unknown"] ?? 0) + c.quantity; });
+    filtered.forEach(c => { t[c.rarity ?? "unknown"] = (t[c.rarity ?? "unknown"] ?? 0) + c.quantity; });
     return Object.entries(t).map(([r, v]) => ({ rarity: r, count: v }));
-  }, [cards]);
+  }, [filtered]);
 
-  const clearFilters = () => {
-    setColorFilter([]); setRarityFilter([]); setFoilFilter(null); setCmcMin(""); setCmcMax(""); setFilter("");
-  };
+  const allFilteredSelected = filtered.length > 0 && filtered.every(c => selected.has(c.id));
 
-  const allFilteredSelected = filtered.length > 0 && filtered.every((c) => selected.has(c.id));
-
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header */}
@@ -324,13 +327,12 @@ export default function Collection() {
             {totalCards.toLocaleString()} cards · ${totalValue.toFixed(2)} est. value · {cards.length} unique
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="border-border/60" onClick={() => setShowStats((v) => !v)}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" className="border-border/60" onClick={() => setShowStats(v => !v)}>
             {showStats ? "Hide stats" : "Show stats"}
           </Button>
           <Button
-            variant={selectMode ? "secondary" : "outline"}
-            size="sm"
+            variant={selectMode ? "secondary" : "outline"} size="sm"
             className={cn("border-border/60 gap-1.5", selectMode && "border-primary/50 text-primary")}
             onClick={toggleSelectMode}
           >
@@ -340,56 +342,88 @@ export default function Collection() {
           <Button asChild className="bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90">
             <Link to="/app/search"><Plus className="mr-1.5 h-4 w-4" /> Add cards</Link>
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-border/60"
-            onClick={() => setImportOpen(true)}
-          >
+          <Button variant="outline" size="sm" className="border-border/60" onClick={() => setImportOpen(true)}>
             <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
           </Button>
         </div>
       </div>
 
+      {/* ── Arcane / Vault / All tab switcher ─── */}
+      <div className="grid grid-cols-3 gap-2">
+        {STORAGE_TABS.map(tab => {
+          const Icon = tab.icon;
+          const isActive = storageTab === tab.key;
+          const count = tab.key === "all" ? cards.length
+            : tab.key === "arcane" ? arcaneCards.length
+            : vaultCards.length;
+          const val = tab.key === "all" ? totalValue
+            : tab.key === "arcane" ? arcaneValue
+            : vaultValue;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setStorageTab(tab.key)}
+              className={cn(
+                "flex flex-col gap-1 rounded-xl border p-3 text-left transition-all",
+                isActive
+                  ? "border-primary/50 bg-primary/8 ring-1 ring-primary/20 shadow-[0_0_20px_hsl(var(--primary)/0.08)]"
+                  : "border-border/50 bg-secondary/20 hover:border-border hover:bg-secondary/40"
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors",
+                  isActive ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground"
+                )}>
+                  <Icon className="h-3.5 w-3.5" />
+                </div>
+                <span className={cn("font-fantasy text-sm font-semibold", isActive ? "text-foreground" : "text-muted-foreground")}>
+                  {tab.label}
+                </span>
+                <span className={cn("ml-auto text-xs font-bold tabular-nums", isActive ? "text-primary" : "text-muted-foreground/60")}>
+                  {count}
+                </span>
+              </div>
+              <p className="pl-9 text-[10px] text-muted-foreground/60 leading-tight hidden sm:block">{tab.desc}</p>
+              {count > 0 && (
+                <p className={cn("pl-9 text-xs font-medium", isActive ? "text-mana-green" : "text-muted-foreground/50")}>
+                  ${val.toFixed(2)}
+                </p>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Bulk action bar */}
       {selectMode && (
         <div className="flex items-center gap-3 rounded-xl border border-primary/30 bg-arcane px-4 py-3 animate-fade-in">
-          <button
-            onClick={allFilteredSelected ? clearSelection : selectAll}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
+          <button onClick={allFilteredSelected ? clearSelection : selectAll}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
             {allFilteredSelected
               ? <CheckSquare className="h-4 w-4 text-primary" />
               : <Square className="h-4 w-4" />}
             {allFilteredSelected ? "Deselect all" : `Select all (${filtered.length})`}
           </button>
-
           <div className="h-4 w-px bg-border/60" />
-
           <span className="text-sm font-medium">
             {selected.size > 0
               ? <>{selected.size} selected · <span className="text-mana-green">${selectedValue.toFixed(2)}</span></>
               : <span className="text-muted-foreground">Tap cards to select</span>}
           </span>
-
           <div className="ml-auto flex items-center gap-2">
             {selected.size > 0 && (
-              <Button
-                size="sm"
+              <Button size="sm"
                 className="h-8 bg-destructive hover:bg-destructive/90 text-destructive-foreground gap-1.5"
-                disabled={bulkDeleting}
-                onClick={() => setConfirmBulkOpen(true)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Delete {selected.size}
+                disabled={bulkDeleting} onClick={() => setConfirmBulkOpen(true)}>
+                <Trash2 className="h-3.5 w-3.5" /> Delete {selected.size}
               </Button>
             )}
           </div>
         </div>
       )}
 
-      {/* Stats panel */}
-      {showStats && cards.length > 0 && (
+      {/* Stats */}
+      {showStats && filtered.length > 0 && (
         <div className="grid gap-4 md:grid-cols-3 animate-fade-in">
           <Card className="border-border bg-card p-4">
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">Mana curve</p>
@@ -407,7 +441,7 @@ export default function Collection() {
               <ResponsiveContainer width="100%" height={100}>
                 <PieChart>
                   <Pie data={colorData} dataKey="value" cx="50%" cy="50%" outerRadius={42} innerRadius={20}>
-                    {colorData.map((entry) => <Cell key={entry.name} fill={entry.fill} />)}
+                    {colorData.map(entry => <Cell key={entry.name} fill={entry.fill} />)}
                   </Pie>
                   <Tooltip contentStyle={{ background:"hsl(var(--card))", border:"1px solid hsl(var(--border))", borderRadius:6, fontSize:11 }} />
                 </PieChart>
@@ -417,9 +451,10 @@ export default function Collection() {
           <Card className="border-border bg-card p-4">
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">Rarity breakdown</p>
             <div className="space-y-2">
-              {RARITIES.filter((r) => rarityData.find((d) => d.rarity === r)).map((r) => {
-                const d = rarityData.find((x) => x.rarity === r);
-                const pct = d ? Math.round((d.count / totalCards) * 100) : 0;
+              {RARITIES.filter(r => rarityData.find(d => d.rarity === r)).map(r => {
+                const d = rarityData.find(x => x.rarity === r);
+                const tot = filtered.reduce((s, c) => s + c.quantity, 0);
+                const pct = d ? Math.round((d.count / tot) * 100) : 0;
                 return (
                   <div key={r} className="flex items-center gap-2 text-xs">
                     <span className={`w-16 capitalize ${RARITY_CLASS[r]?.split(" ")[1] ?? ""}`}>{r}</span>
@@ -437,34 +472,22 @@ export default function Collection() {
 
       {/* Search + controls row */}
       <div className="flex flex-wrap gap-2 items-center">
-        <Input
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter by name…"
-          className="h-9 w-56 text-sm"
-        />
-        <Button
-          variant="outline"
-          size="sm"
+        <Input value={filter} onChange={e => setFilter(e.target.value)}
+          placeholder="Filter by name…" className="h-9 w-56 text-sm" />
+        <Button variant="outline" size="sm"
           className={cn("border-border/60 gap-1.5", activeFilterCount > 0 && "border-primary/50 text-primary")}
-          onClick={() => setShowFilters((v) => !v)}
-        >
+          onClick={() => setShowFilters(v => !v)}>
           <SlidersHorizontal className="h-3.5 w-3.5" />
           Filters
           {activeFilterCount > 0 && <span className="ml-0.5 rounded-full bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold">{activeFilterCount}</span>}
         </Button>
-
         <div className="flex items-center gap-1 text-xs text-muted-foreground ml-auto">
           <ArrowUpDown className="h-3.5 w-3.5" />
-          <select
-            value={sortKey}
-            onChange={(e) => setSortKey(e.target.value as SortKey)}
-            className="bg-transparent border-none text-xs text-muted-foreground focus:outline-none cursor-pointer"
-          >
-            {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          <select value={sortKey} onChange={e => setSortKey(e.target.value as SortKey)}
+            className="bg-transparent border-none text-xs text-muted-foreground focus:outline-none cursor-pointer">
+            {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
-
         <div className="flex rounded-md border border-border/60 overflow-hidden">
           <Button size="sm" variant={view === "grid" ? "secondary" : "ghost"} className="rounded-none h-8 px-2.5" onClick={() => setView("grid")}>
             <LayoutGrid className="h-3.5 w-3.5" />
@@ -490,7 +513,7 @@ export default function Collection() {
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Color</p>
               <div className="flex gap-1.5">
-                {MANA_COLORS.map((c) => (
+                {MANA_COLORS.map(c => (
                   <button key={c.code} onClick={() => toggleColor(c.code)} title={c.label}
                     className={cn("h-7 w-7 rounded-full text-[11px] font-bold ring-2 transition-all", c.bg, c.text,
                       colorFilter.includes(c.code) ? "ring-primary scale-110" : "ring-transparent opacity-50 hover:opacity-80"
@@ -501,7 +524,7 @@ export default function Collection() {
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Rarity</p>
               <div className="flex gap-1">
-                {RARITIES.map((r) => (
+                {RARITIES.map(r => (
                   <button key={r} onClick={() => toggleRarity(r)}
                     className={cn("px-2.5 py-1 rounded text-[10px] uppercase font-medium border transition-all",
                       rarityFilter.includes(r) ? "border-primary/50 bg-primary/10 text-primary" : "border-border/60 text-muted-foreground hover:border-primary/30"
@@ -512,7 +535,7 @@ export default function Collection() {
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Foil</p>
               <div className="flex gap-1">
-                {([null, true, false] as const).map((v) => (
+                {([null, true, false] as const).map(v => (
                   <button key={String(v)} onClick={() => setFoilFilter(v)}
                     className={cn("px-2.5 py-1 rounded text-[10px] uppercase font-medium border transition-all",
                       foilFilter === v ? "border-primary/50 bg-primary/10 text-primary" : "border-border/60 text-muted-foreground hover:border-primary/30"
@@ -523,20 +546,23 @@ export default function Collection() {
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Mana cost (CMC)</p>
               <div className="flex items-center gap-1.5">
-                <Input value={cmcMin} onChange={(e) => setCmcMin(e.target.value)} placeholder="Min" className="h-7 w-14 text-xs" type="number" min={0} />
+                <Input value={cmcMin} onChange={e => setCmcMin(e.target.value)} placeholder="Min" className="h-7 w-14 text-xs" type="number" min={0} />
                 <span className="text-muted-foreground text-xs">–</span>
-                <Input value={cmcMax} onChange={(e) => setCmcMax(e.target.value)} placeholder="Max" className="h-7 w-14 text-xs" type="number" min={0} />
+                <Input value={cmcMax} onChange={e => setCmcMax(e.target.value)} placeholder="Max" className="h-7 w-14 text-xs" type="number" min={0} />
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {(filter || activeFilterCount > 0) && !loading && (
-        <p className="text-xs text-muted-foreground">Showing {filtered.length.toLocaleString()} of {cards.length.toLocaleString()} cards</p>
+      {(filter || activeFilterCount > 0 || storageTab !== "all") && !loading && (
+        <p className="text-xs text-muted-foreground">
+          Showing {filtered.length.toLocaleString()} of {cards.length.toLocaleString()} cards
+          {storageTab !== "all" && <> · <span className={storageTab === "arcane" ? "text-accent" : "text-mana-green"}>{storageTab === "arcane" ? "✦ Arcane" : "✦ Vault"}</span></>}
+        </p>
       )}
 
-      {/* Content */}
+      {/* Card grid / list */}
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading collection…</p>
       ) : cards.length === 0 ? (
@@ -552,44 +578,40 @@ export default function Collection() {
             </Button>
           </CardContent>
         </Card>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-8 text-center">No cards match your current filters.</p>
       ) : view === "grid" ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {filtered.map((c) => {
+          {filtered.map(c => {
             const isSelected = selected.has(c.id);
+            const badge = STORAGE_BADGE[c.storage_type];
             return (
-              <Card
-                key={c.id}
-                className={cn(
-                  "group overflow-hidden border-border bg-card card-hover relative",
-                  isSelected && "ring-2 ring-primary shadow-[0_0_16px_hsl(var(--primary)/0.4)]"
-                )}
-              >
-                {/* Select overlay / checkbox */}
+              <Card key={c.id} className={cn(
+                "group overflow-hidden border-border bg-card card-hover relative",
+                isSelected && "ring-2 ring-primary shadow-[0_0_16px_hsl(var(--primary)/0.4)]"
+              )}>
                 {selectMode && (
-                  <button
-                    type="button"
-                    onClick={() => toggleCard(c.id)}
+                  <button type="button" onClick={() => toggleCard(c.id)}
                     className="absolute top-2 left-2 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-background/80 backdrop-blur-sm ring-1 ring-border transition-all hover:ring-primary"
-                    aria-label={isSelected ? "Deselect" : "Select"}
-                  >
-                    {isSelected
-                      ? <CheckSquare className="h-4 w-4 text-primary" />
-                      : <Square className="h-4 w-4 text-muted-foreground" />}
+                    aria-label={isSelected ? "Deselect" : "Select"}>
+                    {isSelected ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4 text-muted-foreground" />}
                   </button>
                 )}
 
-                <button
-                  type="button"
+                {/* Storage type pill — top right */}
+                <div className="absolute top-2 right-2 z-10">
+                  <span className={cn("rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide backdrop-blur-sm bg-background/70", badge.cls)}>
+                    {c.storage_type === "arcane" ? "✦" : "▣"} {badge.label}
+                  </span>
+                </div>
+
+                <button type="button"
                   onClick={() => selectMode ? toggleCard(c.id) : setOpenId(c.scryfall_id)}
-                  className="block w-full aspect-[488/680] overflow-hidden bg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
-                  aria-label={`Open ${c.card_name} details`}
-                >
-                  {c.image_url ? (
-                    <img src={c.image_url} alt={c.card_name} loading="lazy"
-                      className={cn("h-full w-full object-cover transition-transform duration-500 group-hover:scale-105", isSelected && "opacity-80")} />
-                  ) : (
-                    <div className="flex h-full items-center justify-center p-2 text-center text-xs text-muted-foreground">{c.card_name}</div>
-                  )}
+                  className="block w-full aspect-[488/680] overflow-hidden bg-secondary focus:outline-none focus:ring-2 focus:ring-primary">
+                  {c.image_url
+                    ? <img src={c.image_url} alt={c.card_name} loading="lazy"
+                        className={cn("h-full w-full object-cover transition-transform duration-500 group-hover:scale-105", isSelected && "opacity-80")} />
+                    : <div className="flex h-full items-center justify-center p-2 text-center text-xs text-muted-foreground">{c.card_name}</div>}
                 </button>
 
                 <CardContent className="space-y-2 p-3">
@@ -606,16 +628,30 @@ export default function Collection() {
                     </div>
                   </div>
                   {!selectMode && (
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1 rounded-md border border-border bg-secondary/50">
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQty(c.id, -1)}><Minus className="h-3 w-3" /></Button>
-                        <span className="min-w-[1.5rem] text-center text-sm font-semibold">{c.quantity}</span>
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQty(c.id, 1)}><Plus className="h-3 w-3" /></Button>
+                    <>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1 rounded-md border border-border bg-secondary/50">
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQty(c.id, -1)}><Minus className="h-3 w-3" /></Button>
+                          <span className="min-w-[1.5rem] text-center text-sm font-semibold">{c.quantity}</span>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQty(c.id, 1)}><Plus className="h-3 w-3" /></Button>
+                        </div>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => remove(c.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => remove(c.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+                      {/* Move to Arcane/Vault */}
+                      <button
+                        onClick={() => switchStorage(c.id, c.storage_type === "arcane" ? "vault" : "arcane")}
+                        disabled={movingId === c.id}
+                        className="w-full flex items-center justify-center gap-1 rounded border border-border/40 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:border-border transition-all disabled:opacity-50"
+                      >
+                        {movingId === c.id
+                          ? <Loader2 className="h-3 w-3 animate-spin" />
+                          : c.storage_type === "arcane"
+                            ? <><Package className="h-3 w-3" /> Move to Vault</>
+                            : <><Sparkles className="h-3 w-3" /> Move to Arcane</>}
+                      </button>
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -623,38 +659,34 @@ export default function Collection() {
           })}
         </div>
       ) : (
-        /* List view */
         <div className="rounded-xl border border-border/60 bg-card overflow-hidden divide-y divide-border/40">
-          {filtered.map((c) => {
+          {filtered.map(c => {
             const isSelected = selected.has(c.id);
+            const badge = STORAGE_BADGE[c.storage_type];
             return (
-              <div
-                key={c.id}
-                className={cn("flex items-center gap-3 px-4 py-2.5 hover:bg-secondary/30 transition-colors", isSelected && "bg-primary/5")}
-              >
-                {/* Checkbox in select mode */}
+              <div key={c.id}
+                className={cn("flex items-center gap-3 px-4 py-2.5 hover:bg-secondary/30 transition-colors", isSelected && "bg-primary/5")}>
                 {selectMode && (
                   <button type="button" onClick={() => toggleCard(c.id)} className="shrink-0 focus:outline-none">
-                    {isSelected
-                      ? <CheckSquare className="h-4 w-4 text-primary" />
-                      : <Square className="h-4 w-4 text-muted-foreground" />}
+                    {isSelected ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4 text-muted-foreground" />}
                   </button>
                 )}
-
                 <button type="button" onClick={() => selectMode ? toggleCard(c.id) : setOpenId(c.scryfall_id)} className="shrink-0 focus:outline-none">
-                  {c.image_url ? (
-                    <img src={c.image_url} alt={c.card_name} className="h-10 w-7 rounded object-cover ring-1 ring-border/60" loading="lazy" />
-                  ) : (
-                    <div className="h-10 w-7 rounded bg-secondary" />
-                  )}
+                  {c.image_url
+                    ? <img src={c.image_url} alt={c.card_name} className="h-10 w-7 rounded object-cover ring-1 ring-border/60" loading="lazy" />
+                    : <div className="h-10 w-7 rounded bg-secondary" />}
                 </button>
                 <button type="button" onClick={() => selectMode ? toggleCard(c.id) : setOpenId(c.scryfall_id)} className="flex-1 min-w-0 text-left">
                   <p className="font-fantasy text-sm font-semibold truncate hover:text-primary transition-colors">{c.card_name}</p>
                   <p className="text-xs text-muted-foreground truncate">{c.type_line ?? c.set_name ?? ""}</p>
                 </button>
-                <div className="flex items-center gap-3 shrink-0 text-xs">
-                  {c.rarity && <Badge variant="outline" className={`text-[9px] uppercase hidden sm:inline-flex ${RARITY_CLASS[c.rarity] ?? ""}`}>{c.rarity}</Badge>}
-                  {c.foil && <span className="text-[9px] text-primary font-bold hidden md:block">✦</span>}
+                <div className="flex items-center gap-2 shrink-0 text-xs">
+                  {/* Storage badge */}
+                  <span className={cn("rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase hidden sm:inline-flex", badge.cls)}>
+                    {badge.label}
+                  </span>
+                  {c.rarity && <Badge variant="outline" className={`text-[9px] uppercase hidden md:inline-flex ${RARITY_CLASS[c.rarity] ?? ""}`}>{c.rarity}</Badge>}
+                  {c.foil && <span className="text-[9px] text-primary font-bold hidden lg:block">✦</span>}
                   {c.price_usd && <span className="text-mana-green hidden sm:block">${Number(c.price_usd).toFixed(2)}</span>}
                   {!selectMode && (
                     <>
@@ -663,6 +695,16 @@ export default function Collection() {
                         <span className="min-w-[1.25rem] text-center text-xs font-bold">{c.quantity}</span>
                         <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQty(c.id, 1)}><Plus className="h-2.5 w-2.5" /></Button>
                       </div>
+                      <button
+                        onClick={() => switchStorage(c.id, c.storage_type === "arcane" ? "vault" : "arcane")}
+                        disabled={movingId === c.id}
+                        title={c.storage_type === "arcane" ? "Move to Vault" : "Move to Arcane"}
+                        className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                      >
+                        {movingId === c.id
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : c.storage_type === "arcane" ? <Package className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+                      </button>
                       <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => remove(c.id)}>
                         <Trash2 className="h-3 w-3" />
                       </Button>
@@ -677,12 +719,11 @@ export default function Collection() {
 
       <CardDetailModal
         cardId={openId}
-        siblingIds={filtered.map((c) => c.scryfall_id)}
+        siblingIds={filtered.map(c => c.scryfall_id)}
         onChangeCardId={setOpenId}
         onClose={() => setOpenId(null)}
       />
 
-      {/* Bulk delete confirm */}
       <ConfirmDialog
         open={confirmBulkOpen}
         title={`Delete ${selected.size} card${selected.size !== 1 ? "s" : ""}?`}
@@ -693,24 +734,45 @@ export default function Collection() {
       />
 
       {/* ── Bulk Import Dialog ── */}
-      <Dialog open={importOpen} onOpenChange={(o) => { if (!importing) { setImportOpen(o); if (!o) setImportText(""); } }}>
+      <Dialog open={importOpen} onOpenChange={o => { if (!importing) { setImportOpen(o); if (!o) setImportText(""); } }}>
         <DialogContent className="max-w-lg border-border bg-card">
           <DialogHeader>
             <DialogTitle className="font-fantasy text-xl text-gradient-gold flex items-center gap-2">
               <Upload className="h-5 w-5 text-primary" /> Import to Collection
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
-              Paste a card list and we'll add them to your grimoire.
+              Paste a card list and choose where to store them.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-1">
-            {/* Format guide toggle */}
-            <button
-              type="button"
-              onClick={() => setShowFormat(v => !v)}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
+            {/* Storage type picker for import */}
+            <div className="grid grid-cols-2 gap-2">
+              {(["vault", "arcane"] as StorageType[]).map(t => {
+                const Icon = t === "arcane" ? Sparkles : Package;
+                const isActive = importStorage === t;
+                return (
+                  <button key={t} onClick={() => setImportStorage(t)}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-lg border p-3 text-left transition-all",
+                      isActive ? "border-primary/50 bg-primary/8 ring-1 ring-primary/20" : "border-border/50 bg-secondary/20 hover:border-border"
+                    )}>
+                    <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
+                    <div>
+                      <p className={cn("text-sm font-semibold font-fantasy", isActive ? "text-foreground" : "text-muted-foreground")}>
+                        {t === "arcane" ? "Arcane" : "Vault"}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground/60">
+                        {t === "arcane" ? "Digital · Arena / MTGO" : "Physical · Cards in hand"}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <button type="button" onClick={() => setShowFormat(v => !v)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
               <HelpCircle className="h-3.5 w-3.5" />
               {showFormat ? "Hide" : "Show"} accepted formats
             </button>
@@ -719,68 +781,48 @@ export default function Collection() {
               <div className="rounded-lg border border-border/50 bg-secondary/20 p-3 space-y-2 text-xs">
                 <p className="font-medium text-foreground uppercase tracking-wider text-[10px]">Accepted formats</p>
                 <div className="space-y-1 font-mono text-muted-foreground">
-                  <p className="text-primary/80">// Arena / MTGO export (recommended)</p>
+                  <p className="text-primary/80">// Arena / MTGO export</p>
                   <p>4 Lightning Bolt (M11) 149</p>
-                  <p>1 Black Lotus (LEA) 233</p>
-                  <br />
-                  <p className="text-primary/80">// Simple list with quantity</p>
+                  <p className="text-primary/80 mt-2">// Simple list</p>
                   <p>4 Lightning Bolt</p>
-                  <p>2 Counterspell</p>
-                  <br />
-                  <p className="text-primary/80">// Quantity after name</p>
+                  <p className="text-primary/80 mt-2">// Quantity after name</p>
                   <p>Lightning Bolt x4</p>
-                  <br />
-                  <p className="text-primary/80">// Single copy (no quantity)</p>
+                  <p className="text-primary/80 mt-2">// Single copy</p>
                   <p>Black Lotus</p>
                 </div>
-                <p className="text-muted-foreground/60 pt-1">
-                  Lines starting with <span className="font-mono">Deck</span>, <span className="font-mono">Sideboard</span>, or <span className="font-mono">Commander</span> are ignored.
-                </p>
               </div>
             )}
 
             <Textarea
-              value={importText}
-              onChange={(e) => setImportText(e.target.value)}
-              placeholder={`4 Lightning Bolt (M11) 149\n2 Counterspell (7ED) 69\n1 Sol Ring (C21) 263\n\nOr simply:\n4 Lightning Bolt\n2 Counterspell`}
-              className="min-h-[200px] font-mono text-xs bg-secondary/40 border-border/60 resize-none"
+              value={importText} onChange={e => setImportText(e.target.value)}
+              placeholder={`4 Lightning Bolt (M11) 149\n2 Counterspell (7ED) 69\n1 Sol Ring (C21) 263`}
+              className="min-h-[180px] font-mono text-xs bg-secondary/40 border-border/60 resize-none"
               disabled={importing}
             />
 
             {importing && importProgress.total > 0 && (
               <div className="space-y-1.5">
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Adding cards to grimoire…</span>
+                  <span>Adding to {importStorage === "arcane" ? "Arcane" : "Vault"}…</span>
                   <span>{importProgress.current} / {importProgress.total}</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-primary to-primary-glow rounded-full transition-all duration-300"
-                    style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
-                  />
+                  <div className="h-full bg-gradient-to-r from-primary to-primary-glow rounded-full transition-all duration-300"
+                    style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }} />
                 </div>
               </div>
             )}
 
             <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => { setImportOpen(false); setImportText(""); }}
-                disabled={importing}
-                className="px-4 py-2 rounded-md border border-border/60 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-              >
+              <button type="button" onClick={() => { setImportOpen(false); setImportText(""); }} disabled={importing}
+                className="px-4 py-2 rounded-md border border-border/60 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={handleBulkImport}
-                disabled={importing || !importText.trim()}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-gradient-to-r from-primary to-primary-glow text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
-              >
+              <button type="button" onClick={handleBulkImport} disabled={importing || !importText.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-gradient-to-r from-primary to-primary-glow text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50">
                 {importing
                   ? <><Loader2 className="h-4 w-4 animate-spin" /> Importing…</>
-                  : <><Upload className="h-4 w-4" /> Import cards</>
-                }
+                  : <><Upload className="h-4 w-4" /> Import to {importStorage === "arcane" ? "Arcane" : "Vault"}</>}
               </button>
             </div>
           </div>
