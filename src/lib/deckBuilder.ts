@@ -303,6 +303,8 @@ export async function buildDeckMath(params: DeckBuilderParams): Promise<BuiltDec
     if (!banned) return true; // Commander/Casual/Modern — no hardcoded ban list
     return !banned.has(cardName.toLowerCase());
   }
+
+  function colorMatches(card: CollectionCard): boolean {
     // No color restriction — all cards allowed
     if (!colorId || params.colors.length === 0) return true;
     const cardColors = card.colors ?? [];

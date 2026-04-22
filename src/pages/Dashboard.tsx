@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { ManaPie } from "@/components/ManaSymbol";
 import { LineChart, Line, XAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { generateDeck } from "@/lib/gemini";
+import { generateCollectionInsight } from "@/lib/gemini";
 
 interface Stats {
   totalCards: number;
@@ -63,15 +63,8 @@ export default function Dashboard() {
       if (list.length >= 5) {
         setInsightLoading(true);
         try {
-          const topCards = list.slice(0, 15).map((c) => c.card_name).join(", ");
-          const { description } = await generateDeck({
-            format: "casual",
-            style: "combo",
-            colors: [],
-            budget: "any",
-            notes: `Give me ONE short tip (2 sentences max) about synergies or upgrade ideas for a collection containing: ${topCards}. Reply as plain text, no JSON.`,
-          });
-          const tip = description || "Keep exploring the multiverse — your collection is growing!";
+          const topCards = list.slice(0, 15).map((c) => c.card_name);
+          const tip = await generateCollectionInsight(topCards);
           setInsight(tip);
           sessionStorage.setItem(cacheKey, tip);
         } catch {

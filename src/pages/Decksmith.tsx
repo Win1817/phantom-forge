@@ -9,8 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { generateDeckNarrative, type DeckNarrative } from "@/lib/gemini";
-import { buildDeck, type BuiltDeck, type BuiltDeckCard, type CollectionCard } from "@/lib/mtgmath";
+import { generateDeck, generateDeckNarrative, type GeneratedDeck } from "@/lib/gemini";
+import { buildDeck, type CollectionCard } from "@/lib/mtgmath";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
@@ -34,12 +34,13 @@ interface GeneratedResult {
   deckList: string;
   cardCount: number;
   roleBreakdown: Partial<Record<string, number>>;
-  narrative: DeckNarrative;
-  cards: BuiltDeckCard[];
+  name: string;
+  description: string;
+  strategy: string;
+  resolvedCards: GeneratedDeck["resolvedCards"];
 }
 
-// Build progress steps
-type BuildStep = "idle" | "fetching" | "narrative" | "done";
+type BuildStep = "idle" | "thinking" | "resolving" | "done";
 
 export default function Decksmith() {
   const { user } = useAuth();
@@ -100,33 +101,76 @@ export default function Decksmith() {
     }
     setLastGenerated(Date.now());
     setGenerated(null);
-    setBuildStep("fetching");
-    setBuildProgress(10);
+    setBuildStep("thinking");
+    setBuildProgress(15);
 
     try {
-      // Step 1 — Math: build real deck from Scryfall data
-      setBuildProgress(20);
-      const built: BuiltDeck = await buildDeck(format, style, selectedColors, budget, useCollection ? collection : undefined, useCollection);
-      setBuildProgress(75);
+      if (useCollection && collection.length > 0) {
+        // ── Math-first: build from owned cards, fill gaps from Scryfall ──
+        setBuildProgress(25);
+        const built = await buildDeck(format, style, selectedColors, budget, collection, true);
+        setBuildProgress(75);
 
-      // Step 2 — AI: generate name + narrative only
-      setBuildStep("narrative");
-      setBuildProgress(82);
-      const narrative = await generateDeckNarrative({
-        format, style, colors: selectedColors, budget,
-        notes: notes.trim(),
-        roleBreakdown: built.roleBreakdown,
-      });
-      setBuildProgress(100);
-      setBuildStep("done");
+        setBuildStep("resolving");
+        const narrative = await generateDeckNarrative({
+          format, style, colors: selectedColors, budget,
+          notes: notes.trim() || undefined,
+          roleBreakdown: built.roleBreakdown,
+        });
+        setBuildProgress(100);
+        setBuildStep("done");
 
-      setGenerated({
-        deckList: built.deckList,
-        cardCount: built.cardCount,
-        roleBreakdown: built.roleBreakdown,
-        narrative,
-        cards: built.cards,
-      });
+        // Map BuiltDeckCard → ResolvedCard so saveToDeckWorkshop works unchanged
+        const resolvedCards: GeneratedDeck["resolvedCards"] = built.cards.map(c => ({
+          scryfall_id:      c.id ?? "unknown",
+          name:             c.name,
+          quantity:         c.quantity,
+          set_code:         c.set ?? null,
+          collector_number: c.collector_number ?? null,
+          image_url:        c.image_uris?.normal ?? c.image_uris?.large ?? c.image_uris?.small
+                            ?? c.card_faces?.[0]?.image_uris?.normal ?? null,
+          mana_cost:        c.mana_cost ?? null,
+          cmc:              c.cmc ?? null,
+          type_line:        c.type_line ?? null,
+          colors:           c.colors ?? [],
+          is_commander:     c.is_commander ?? false,
+          is_sideboard:     false,
+        }));
+
+        setGenerated({
+          deckList:      built.deckList,
+          cardCount:     built.cardCount,
+          roleBreakdown: built.roleBreakdown,
+          name:          narrative.name,
+          description:   narrative.description,
+          strategy:      narrative.strategy,
+          resolvedCards,
+        });
+      } else {
+        // ── AI-first: Gemini picks cards, Scryfall resolves metadata ──
+        setBuildProgress(30);
+        const result = await generateDeck({
+          format, style,
+          colors: selectedColors,
+          budget,
+          notes: notes.trim() || undefined,
+        });
+        setBuildProgress(80);
+
+        setBuildStep("resolving");
+        setBuildProgress(100);
+        setBuildStep("done");
+
+        setGenerated({
+          deckList:      result.deckList,
+          cardCount:     result.resolvedCards.reduce((s, c) => s + c.quantity, 0),
+          roleBreakdown: result.slotSummary ?? {},
+          name:          result.name,
+          description:   result.description,
+          strategy:      result.strategy,
+          resolvedCards: result.resolvedCards,
+        });
+      }
     } catch (e) {
       toast.error((e as Error).message || "Generation failed");
       setBuildStep("idle");
@@ -162,7 +206,7 @@ export default function Decksmith() {
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
     a.href = url;
-    a.download = `${generated.narrative.name.replace(/\s+/g, "_")}.txt`;
+    a.download = `${generated.name.replace(/\s+/g, "_")}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -171,55 +215,43 @@ export default function Decksmith() {
     if (!generated || !user) return;
     setSaving(true);
     try {
-      // Create the deck row
       const { data: deck, error: deckErr } = await supabase
         .from("decks")
         .insert({
           user_id: user.id,
-          name: generated.narrative.name,
+          name: generated.name,
           format: format.toLowerCase(),
-          description: generated.narrative.description,
+          description: generated.description,
           colors: selectedColors.length > 0 ? selectedColors : null,
         })
         .select().single();
       if (deckErr || !deck) throw new Error(deckErr?.message ?? "Failed to create deck");
 
-      // Use the full Scryfall card objects stored at build time — never re-parse text
-      const inserts = generated.cards
-        .filter((c) => c.quantity > 0)
-        .map((c) => {
-          // Resolve image from image_uris or card_faces
-          const image_url =
-            c.image_uris?.normal ??
-            c.image_uris?.large ??
-            c.image_uris?.small ??
-            c.card_faces?.[0]?.image_uris?.normal ??
-            c.card_faces?.[0]?.image_uris?.large ??
-            null;
-
-          return {
-            deck_id: deck.id,
-            scryfall_id: c.id && c.id !== "" ? c.id : "unknown",
-            card_name: c.name,
-            quantity: c.quantity,
-            set_code: c.set ?? null,
-            collector_number: c.collector_number ?? null,
-            image_url,
-            mana_cost: c.mana_cost ?? null,
-            cmc: c.cmc ?? null,
-            type_line: c.type_line ?? null,
-            colors: c.colors ?? [],
-            is_commander: c.is_commander ?? false,
-            is_sideboard: c.is_sideboard ?? false,
-          };
-        });
+      // resolvedCards already contain verified Scryfall data — insert directly
+      const inserts = generated.resolvedCards
+        .filter(c => c.quantity > 0)
+        .map(c => ({
+          deck_id:          deck.id,
+          scryfall_id:      c.scryfall_id,
+          card_name:        c.name,
+          quantity:         c.quantity,
+          set_code:         c.set_code,
+          collector_number: c.collector_number,
+          image_url:        c.image_url,
+          mana_cost:        c.mana_cost,
+          cmc:              c.cmc,
+          type_line:        c.type_line,
+          colors:           c.colors,
+          is_commander:     c.is_commander,
+          is_sideboard:     c.is_sideboard,
+        }));
 
       if (inserts.length === 0) throw new Error("No cards to save — deck list may be empty");
 
       const { error: insertErr } = await supabase.from("deck_cards").insert(inserts);
       if (insertErr) throw new Error(insertErr.message);
 
-      toast.success(`"${generated.narrative.name}" saved to Deck Workshop`);
+      toast.success(`"${generated.name}" saved to Deck Workshop`);
       navigate(`/app/decks/${deck.id}`);
     } catch (e) {
       toast.error((e as Error).message);
@@ -228,12 +260,16 @@ export default function Decksmith() {
     }
   };
 
-  const isBuilding = buildStep === "fetching" || buildStep === "narrative";
+  const isBuilding = buildStep === "thinking" || buildStep === "resolving";
 
   const STEP_LABELS: Record<BuildStep, string> = {
     idle:      "",
-    fetching:  "Fetching real cards from Scryfall…",
-    narrative: "AI writing deck name & strategy…",
+    thinking:  useCollection && collection.length > 0
+                 ? "Building from your collection…"
+                 : "AI is building your deck…",
+    resolving: useCollection && collection.length > 0
+                 ? "AI writing deck name & strategy…"
+                 : "Verifying cards with Scryfall…",
     done:      "",
   };
 
@@ -354,7 +390,7 @@ export default function Decksmith() {
           {isBuilding && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                {buildStep === "fetching"
+                {buildStep === "thinking"
                   ? <Zap className="h-3.5 w-3.5 text-primary animate-pulse" />
                   : <Sparkles className="h-3.5 w-3.5 text-primary animate-pulse" />}
                 {STEP_LABELS[buildStep]}
@@ -366,7 +402,7 @@ export default function Decksmith() {
           <Button onClick={generate} disabled={isBuilding || cooldownRemaining > 0}
             className="w-full h-11 bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90 font-semibold disabled:opacity-50">
             {isBuilding ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {buildStep === "fetching" ? "Pulling cards…" : "Naming deck…"}</>
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {buildStep === "thinking" ? "AI is thinking…" : "Verifying cards…"}</>
             ) : cooldownRemaining > 0 ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Ready in {cooldownRemaining}s…</>
             ) : (
@@ -406,9 +442,9 @@ export default function Decksmith() {
               <CardContent className="flex flex-col items-center justify-center gap-4 py-16 text-center h-full">
                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
                 <p className="text-sm text-muted-foreground">
-                  {buildStep === "fetching"
-                    ? "Querying Scryfall for real cards…"
-                    : "Gemini is naming your deck…"}
+                  {buildStep === "thinking"
+                    ? "AI is building your deck…"
+                    : "Verifying cards with Scryfall…"}
                 </p>
               </CardContent>
             </Card>
@@ -419,8 +455,8 @@ export default function Decksmith() {
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <CardTitle className="font-fantasy text-lg text-gradient-gold">{generated.narrative.name}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-1">{generated.narrative.description}</p>
+                    <CardTitle className="font-fantasy text-lg text-gradient-gold">{generated.name}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1">{generated.description}</p>
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">{format}</Badge>
@@ -434,10 +470,10 @@ export default function Decksmith() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {generated.narrative.strategy && (
+                {generated.strategy && (
                   <div className="rounded-lg border border-border bg-secondary/30 p-3 text-xs text-muted-foreground leading-relaxed">
                     <p className="font-semibold text-foreground mb-1 uppercase tracking-wider text-[10px]">Strategy</p>
-                    {generated.narrative.strategy}
+                    {generated.strategy}
                   </div>
                 )}
 
@@ -481,7 +517,7 @@ export default function Decksmith() {
         <DialogContent className="max-w-2xl border-border bg-card">
           <DialogHeader>
             <DialogTitle className="font-fantasy text-xl text-gradient-gold flex items-center gap-2">
-              <Download className="h-5 w-5 text-primary" /> Export — {generated?.narrative.name}
+              <Download className="h-5 w-5 text-primary" /> Export — {generated?.name}
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
               Arena / MTGO format. Copy or download.
