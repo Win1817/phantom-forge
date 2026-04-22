@@ -3,7 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Loader2, Swords, Shield, Crown,
   LayoutGrid, List, Download, Trash2, Plus, Search, X, CheckCircle2,
-  Share2, Link2, Link2Off, Copy, Check
+  Share2, Copy, Check, Library, Sparkles, ChevronDown, ChevronUp,
+  AlertTriangle, TrendingUp, Zap
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { callGeminiRaw } from "@/lib/gemini";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import CardDetailModal from "@/components/CardDetailModal";
@@ -44,6 +47,16 @@ interface Deck {
   created_at: string;
   is_public: boolean;
   share_token: string | null;
+}
+
+interface DeckAnalysis {
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  suggestions: string[];
+  curve_assessment: string;
+  win_conditions: string[];
+  rating: number; // 1-10
 }
 
 const MANA_COLOR: Record<string, string> = {
@@ -95,6 +108,14 @@ export default function DeckDetail() {
 
   // Owned scryfall IDs for cross-reference
   const [ownedIds, setOwnedIds] = useState<Set<string>>(new Set());
+
+  // Save to collection
+  const [savingToCollection, setSavingToCollection] = useState(false);
+
+  // AI analysis
+  const [analysisOpen, setAnalysisOpen]   = useState(false);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysis, setAnalysis]           = useState<DeckAnalysis | null>(null);
 
   // Add card search
   const [addQuery, setAddQuery] = useState("");
@@ -177,6 +198,90 @@ export default function DeckDetail() {
   const removeCard = async (cardId: string) => {
     setCards((prev) => prev.filter((c) => c.id !== cardId));
     await supabase.from("deck_cards").delete().eq("id", cardId);
+  };
+
+  const saveToCollection = async () => {
+    if (!user || cards.length === 0) return;
+    setSavingToCollection(true);
+    let added = 0, updated = 0;
+    try {
+      for (const card of cards) {
+        if (!card.scryfall_id || card.scryfall_id === "unknown") continue;
+        const { data: existing } = await supabase
+          .from("collection_cards")
+          .select("id, quantity")
+          .eq("user_id", user.id)
+          .eq("scryfall_id", card.scryfall_id)
+          .maybeSingle();
+
+        if (existing) {
+          await supabase.from("collection_cards")
+            .update({ quantity: existing.quantity + card.quantity })
+            .eq("id", existing.id);
+          updated++;
+        } else {
+          await supabase.from("collection_cards").insert({
+            user_id: user.id,
+            scryfall_id: card.scryfall_id,
+            card_name: card.card_name,
+            set_code: card.set_code ?? null,
+            collector_number: card.collector_number ?? null,
+            mana_cost: card.mana_cost ?? null,
+            type_line: card.type_line ?? null,
+            colors: card.colors ?? [],
+            cmc: card.cmc ?? null,
+            image_url: card.image_url ?? null,
+            quantity: card.quantity,
+          });
+          added++;
+        }
+      }
+      // Refresh owned IDs
+      const { data: colData } = await supabase.from("collection_cards").select("scryfall_id");
+      setOwnedIds(new Set((colData ?? []).map((c) => c.scryfall_id)));
+      toast.success(`Saved to collection — ${added} new, ${updated} updated`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSavingToCollection(false);
+    }
+  };
+
+  const analyzeWithAI = async () => {
+    if (!deck || cards.length === 0) return;
+    setAnalysisOpen(true);
+    if (analysis) return; // cached
+    setAnalysisLoading(true);
+    try {
+      const cardList = cards
+        .map((c) => `${c.quantity}x ${c.card_name}${c.is_commander ? " [Commander]" : c.is_sideboard ? " [Sideboard]" : ""}`)
+        .join("\n");
+
+      const prompt = `You are an expert Magic: The Gathering deck analyst. Analyse this ${deck.format} deck called "${deck.name}".
+
+Deck list:
+${cardList}
+
+Return ONLY valid JSON (no markdown, no code fences):
+{
+  "summary": "2-3 sentence overview of what this deck tries to do",
+  "strengths": ["strength 1", "strength 2", "strength 3"],
+  "weaknesses": ["weakness 1", "weakness 2", "weakness 3"],
+  "suggestions": ["specific card to add or swap with reason", "another suggestion", "another suggestion"],
+  "curve_assessment": "1-2 sentences about the mana curve quality",
+  "win_conditions": ["win condition 1", "win condition 2"],
+  "rating": 7
+}`;
+
+      const raw = await callGeminiRaw(prompt, 800);
+      const parsed = JSON.parse(raw) as DeckAnalysis;
+      setAnalysis(parsed);
+    } catch (e) {
+      toast.error("AI analysis failed: " + (e as Error).message);
+      setAnalysisOpen(false);
+    } finally {
+      setAnalysisLoading(false);
+    }
   };
 
   const onAddQueryChange = (val: string) => {
@@ -286,6 +391,30 @@ export default function DeckDetail() {
             <Button size="sm" variant={view === "list" ? "secondary" : "ghost"} className="rounded-none h-8 px-2.5 border-l border-border/60" onClick={() => setView("list")}><List className="h-3.5 w-3.5" /></Button>
           </div>
           <Button variant="outline" size="sm" className="border-border/60 h-8" onClick={handleExport}><Download className="mr-1.5 h-3.5 w-3.5" /> Export</Button>
+
+          {/* Save to Collection */}
+          <Button
+            variant="outline" size="sm"
+            className="h-8 border-mana-green/40 text-mana-green hover:bg-mana-green/10 gap-1.5"
+            onClick={saveToCollection}
+            disabled={savingToCollection || cards.length === 0}
+            title="Save all deck cards to your collection"
+          >
+            {savingToCollection ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Library className="h-3.5 w-3.5" />}
+            <span className="hidden sm:inline">Save to Vault</span>
+          </Button>
+
+          {/* AI Analyse */}
+          <Button
+            variant="outline" size="sm"
+            className="h-8 border-primary/40 text-primary hover:bg-primary/10 gap-1.5"
+            onClick={analyzeWithAI}
+            disabled={cards.length === 0}
+            title="AI deck analysis"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Analyse</span>
+          </Button>
 
           {/* Share toggle */}
           <Button
@@ -419,6 +548,108 @@ export default function DeckDetail() {
       />
 
       <CardDetailModal cardId={openId} siblingIds={allScryfallIds} onChangeCardId={setOpenId} onClose={() => setOpenId(null)} />
+
+      {/* AI Deck Analysis Dialog */}
+      <Dialog open={analysisOpen} onOpenChange={(o) => { setAnalysisOpen(o); if (!o) setAnalysis(null); }}>
+        <DialogContent className="max-w-lg border-border bg-card max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-fantasy text-xl text-gradient-gold flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" /> AI Deck Analysis
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              {deck?.name} · {deck?.format}
+            </DialogDescription>
+          </DialogHeader>
+
+          {analysisLoading && (
+            <div className="flex flex-col items-center justify-center gap-3 py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Consulting the arcane archives…</p>
+            </div>
+          )}
+
+          {analysis && !analysisLoading && (
+            <div className="space-y-5 pt-2">
+              {/* Rating */}
+              <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 border-primary/40 bg-card">
+                  <span className="font-fantasy text-2xl font-bold text-primary">{analysis.rating}</span>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Deck Rating</p>
+                  <div className="mt-1 h-2 w-32 rounded-full bg-secondary overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-r from-primary to-primary-glow transition-all" style={{ width: `${analysis.rating * 10}%` }} />
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{analysis.rating}/10</p>
+                </div>
+                <p className="flex-1 text-sm text-foreground leading-relaxed">{analysis.summary}</p>
+              </div>
+
+              {/* Win conditions */}
+              {analysis.win_conditions?.length > 0 && (
+                <div>
+                  <p className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground mb-2"><Zap className="h-3.5 w-3.5 text-primary" /> Win Conditions</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {analysis.win_conditions.map((w, i) => (
+                      <Badge key={i} variant="outline" className="border-primary/30 text-primary text-[11px]">{w}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Curve */}
+              <div className="rounded-lg border border-border/50 bg-secondary/20 p-3">
+                <p className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground mb-1.5"><TrendingUp className="h-3.5 w-3.5" /> Mana Curve</p>
+                <p className="text-sm text-foreground leading-relaxed">{analysis.curve_assessment}</p>
+              </div>
+
+              {/* Strengths */}
+              <div>
+                <p className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground mb-2 text-mana-green"><CheckCircle2 className="h-3.5 w-3.5" /> Strengths</p>
+                <ul className="space-y-1.5">
+                  {analysis.strengths.map((s, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-mana-green shrink-0" />
+                      {s}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Weaknesses */}
+              <div>
+                <p className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground mb-2 text-destructive"><AlertTriangle className="h-3.5 w-3.5" /> Weaknesses</p>
+                <ul className="space-y-1.5">
+                  {analysis.weaknesses.map((w, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-destructive shrink-0" />
+                      {w}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Suggestions */}
+              <div>
+                <p className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground mb-2 text-primary"><Sparkles className="h-3.5 w-3.5" /> AI Suggestions</p>
+                <ul className="space-y-2">
+                  {analysis.suggestions.map((s, i) => (
+                    <li key={i} className="rounded-lg border border-border/50 bg-secondary/20 px-3 py-2 text-sm leading-relaxed">{s}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <Button
+                variant="outline"
+                className="w-full border-border/60"
+                onClick={() => { setAnalysis(null); analyzeWithAI(); }}
+              >
+                <Sparkles className="mr-1.5 h-4 w-4" /> Re-analyse
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -80,6 +80,11 @@ async function callGemini(system: string, user: string, maxTokens = 256): Promis
   throw new Error(`All Gemini models unavailable. Last: ${lastErr}`);
 }
 
+/** Public passthrough for one-off prompts (e.g. deck analysis) */
+export async function callGeminiRaw(prompt: string, maxTokens = 512): Promise<string> {
+  return callGemini("You are a concise MTG expert. Reply with raw JSON only, no markdown.", prompt, maxTokens);
+}
+
 // ── Card Explanation (hybrid) ─────────────────────────────────────────────────
 
 export interface CardPayload {
