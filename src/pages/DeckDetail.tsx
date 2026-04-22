@@ -200,7 +200,7 @@ export default function DeckDetail() {
     await supabase.from("deck_cards").delete().eq("id", cardId);
   };
 
-  const saveToCollection = async () => {
+  const saveToCollection = async (storageType: "vault" | "arcane") => {
     if (!user || cards.length === 0) return;
     setSavingToCollection(true);
     let added = 0, updated = 0;
@@ -212,6 +212,7 @@ export default function DeckDetail() {
           .select("id, quantity")
           .eq("user_id", user.id)
           .eq("scryfall_id", card.scryfall_id)
+          .eq("storage_type", storageType)
           .maybeSingle();
 
         if (existing) {
@@ -232,14 +233,15 @@ export default function DeckDetail() {
             cmc: card.cmc ?? null,
             image_url: card.image_url ?? null,
             quantity: card.quantity,
+            storage_type: storageType,
           });
           added++;
         }
       }
-      // Refresh owned IDs
       const { data: colData } = await supabase.from("collection_cards").select("scryfall_id");
       setOwnedIds(new Set((colData ?? []).map((c) => c.scryfall_id)));
-      toast.success(`Saved to collection — ${added} new, ${updated} updated`);
+      const label = storageType === "vault" ? "🗃️ Vault" : "✨ Arcane Collection";
+      toast.success(`Saved to ${label} — ${added} new, ${updated} updated`);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -392,17 +394,29 @@ Return ONLY valid JSON (no markdown, no code fences):
           </div>
           <Button variant="outline" size="sm" className="border-border/60 h-8" onClick={handleExport}><Download className="mr-1.5 h-3.5 w-3.5" /> Export</Button>
 
-          {/* Save to Collection */}
-          <Button
-            variant="outline" size="sm"
-            className="h-8 border-mana-green/40 text-mana-green hover:bg-mana-green/10 gap-1.5"
-            onClick={saveToCollection}
-            disabled={savingToCollection || cards.length === 0}
-            title="Save all deck cards to your collection"
-          >
-            {savingToCollection ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Library className="h-3.5 w-3.5" />}
-            <span className="hidden sm:inline">Save to Vault</span>
-          </Button>
+          {/* Save to Collection — Vault or Arcane */}
+          <div className="relative flex h-8">
+            <Button
+              variant="outline" size="sm"
+              className="h-8 rounded-r-none border-r-0 border-mana-green/40 text-mana-green hover:bg-mana-green/10 gap-1.5 pr-2.5"
+              onClick={() => saveToCollection("vault")}
+              disabled={savingToCollection || cards.length === 0}
+              title="Save to Vault (physical cards)"
+            >
+              {savingToCollection ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Library className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline text-xs">Vault</span>
+            </Button>
+            <Button
+              variant="outline" size="sm"
+              className="h-8 rounded-l-none border-mana-green/40 text-mana-green hover:bg-mana-green/10 gap-1 px-2"
+              onClick={() => saveToCollection("arcane")}
+              disabled={savingToCollection || cards.length === 0}
+              title="Save to Arcane Collection (digital/Arena)"
+            >
+              <Sparkles className="h-3 w-3" />
+              <span className="hidden sm:inline text-xs">Arcane</span>
+            </Button>
+          </div>
 
           {/* AI Analyse */}
           <Button
