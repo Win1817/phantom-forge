@@ -1,5 +1,5 @@
 import { NavLink as RouterNavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Library, Search, LayersIcon, Sparkles, Heart, Settings, ScanLine } from "lucide-react";
+import { LayoutDashboard, Library, Search, LayersIcon, Sparkles, Heart, Settings, ScanLine, BookOpen } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -24,6 +24,7 @@ const mainItems = [
 
 const aiItems = [
   { title: "AI Decksmith", url: "/app/decksmith", icon: Sparkles },
+  { title: "Forge Guide", url: "/app/forge-guide", icon: BookOpen },
   { title: "Card Scanner", url: "/app/scanner", icon: ScanLine },
 ];
 

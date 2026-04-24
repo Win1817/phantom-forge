@@ -1,9 +1,16 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Search as SearchIcon, Plus, Loader2, ChevronDown } from "lucide-react";
+import {
+  Search as SearchIcon, Plus, Loader2, ChevronDown,
+  Download, Copy, Check, FileText, X
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { searchCards, getCardImage, primeCardCache, autocomplete, type ScryfallCard } from "@/lib/scryfall";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -11,10 +18,10 @@ import CardDetailModal from "@/components/CardDetailModal";
 import { cn } from "@/lib/utils";
 
 const RARITY_CLASS: Record<string, string> = {
-  common: "border-rarity-common/40 text-rarity-common",
+  common:   "border-rarity-common/40 text-rarity-common",
   uncommon: "border-rarity-uncommon/50 text-rarity-uncommon",
-  rare: "border-rarity-rare/60 text-rarity-rare",
-  mythic: "border-rarity-mythic/60 text-rarity-mythic",
+  rare:     "border-rarity-rare/60 text-rarity-rare",
+  mythic:   "border-rarity-mythic/60 text-rarity-mythic",
 };
 
 const MANA_COLORS = [
@@ -25,8 +32,7 @@ const MANA_COLORS = [
   { code: "G", bg: "bg-mana-green", text: "text-white" },
 ];
 
-const FORMATS = ["standard","pioneer","modern","legacy","vintage","commander","pauper"];
-
+const FORMATS   = ["standard","pioneer","modern","legacy","vintage","commander","pauper"];
 const CARD_TYPES = [
   { label: "Creature",     icon: "🐉", query: "creature" },
   { label: "Instant",      icon: "⚡", query: "instant" },
@@ -37,53 +43,87 @@ const CARD_TYPES = [
   { label: "Land",         icon: "🏔️", query: "land" },
   { label: "Battle",       icon: "⚔️", query: "battle" },
 ];
-
-const SUBTYPES = [
-  "Dragon","Elf","Goblin","Vampire","Zombie","Merfolk",
-  "Angel","Demon","Wizard","Knight","Warrior","Beast",
-  "Human","Spirit","Eldrazi","Sliver",
-];
-
+const SUBTYPES   = ["Dragon","Elf","Goblin","Vampire","Zombie","Merfolk","Angel","Demon","Wizard","Knight","Warrior","Beast","Human","Spirit","Eldrazi","Sliver"];
 const SUPERTYPES = ["Legendary","Snow","Basic","Token","World"];
+
+type ExportFormat = "arena" | "csv" | "text";
+
+function buildExportText(cards: ScryfallCard[], format: ExportFormat): string {
+  if (format === "arena") {
+    return "Deck\n" + cards
+      .map((c) => `1 ${c.name}${c.set ? ` (${c.set.toUpperCase()}) ${c.collector_number ?? ""}` : ""}`.trimEnd())
+      .join("\n");
+  }
+  if (format === "csv") {
+    const header = "Name,Set,Collector Number,Rarity,Mana Cost,CMC,Type,Price USD";
+    const rows = cards.map((c) =>
+      [
+        `"${c.name}"`,
+        c.set?.toUpperCase() ?? "",
+        c.collector_number ?? "",
+        c.rarity ?? "",
+        c.mana_cost?.replace(/[{}]/g,"") ?? "",
+        c.cmc ?? "",
+        `"${c.type_line ?? ""}"`,
+        c.prices?.usd ?? "",
+      ].join(",")
+    );
+    return [header, ...rows].join("\n");
+  }
+  // plain text
+  return cards.map((c) => {
+    const parts = [c.name];
+    if (c.set) parts.push(`(${c.set.toUpperCase()})`);
+    if (c.prices?.usd) parts.push(`$${c.prices.usd}`);
+    return parts.join(" · ");
+  }).join("\n");
+}
 
 export default function CardSearch() {
   const [params, setParams] = useSearchParams();
   const initial = params.get("q") ?? "";
-  const [query, setQuery] = useState(initial);
-  const [busy, setBusy] = useState(false);
-  const [results, setResults] = useState<ScryfallCard[]>([]);
-  const [total, setTotal] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [page, setPage] = useState(1);
+  const [query, setQuery]       = useState(initial);
+  const [busy, setBusy]         = useState(false);
+  const [results, setResults]   = useState<ScryfallCard[]>([]);
+  const [total, setTotal]       = useState(0);
+  const [hasMore, setHasMore]   = useState(false);
+  const [page, setPage]         = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [adding, setAdding] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [adding, setAdding]     = useState<string | null>(null);
+  const [openId, setOpenId]     = useState<string | null>(null);
 
   // Autocomplete
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions]       = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [acBusy, setAcBusy] = useState(false);
+  const [acBusy, setAcBusy]                 = useState(false);
   const acTimer = useRef<ReturnType<typeof setTimeout>>();
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Advanced filters
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [colorFilter, setColorFilter] = useState<string[]>([]);
-  const [typeFilter, setTypeFilter] = useState<string[]>([]);
-  const [subtypeFilter, setSubtypeFilter] = useState("");
-  const [supertypeFilter, setSupertypeFilter] = useState("");
-  const [formatFilter, setFormatFilter] = useState<string>("");
-  const [rarityFilter, setRarityFilter] = useState<string>("");
-  const [cmcMin, setCmcMin] = useState("");
-  const [cmcMax, setCmcMax] = useState("");
-  const [lastQ, setLastQ] = useState("");
+  const [showAdvanced, setShowAdvanced]         = useState(false);
+  const [colorFilter, setColorFilter]           = useState<string[]>([]);
+  const [typeFilter, setTypeFilter]             = useState<string[]>([]);
+  const [subtypeFilter, setSubtypeFilter]       = useState("");
+  const [supertypeFilter, setSupertypeFilter]   = useState("");
+  const [formatFilter, setFormatFilter]         = useState("");
+  const [rarityFilter, setRarityFilter]         = useState("");
+  const [cmcMin, setCmcMin]                     = useState("");
+  const [cmcMax, setCmcMax]                     = useState("");
+  const [lastQ, setLastQ]                       = useState("");
+
+  // Export
+  const [exportOpen, setExportOpen]   = useState(false);
+  const [exportFmt, setExportFmt]     = useState<ExportFormat>("arena");
+  const [copied, setCopied]           = useState(false);
+  const [loadingAll, setLoadingAll]   = useState(false);
+  const [allResults, setAllResults]   = useState<ScryfallCard[]>([]);
 
   useEffect(() => { if (initial) runSearch(initial, 1); }, []);
 
   const buildQuery = useCallback((baseQ: string) => {
     let q = baseQ.trim();
     if (colorFilter.length) q += ` c:${colorFilter.join("")}`;
-    if (typeFilter.length) typeFilter.forEach(t => { q += ` t:${t}`; });
+    if (typeFilter.length) typeFilter.forEach((t) => { q += ` t:${t}`; });
     if (subtypeFilter.trim()) q += ` t:${subtypeFilter.trim().toLowerCase()}`;
     if (supertypeFilter) q += ` t:${supertypeFilter.toLowerCase()}`;
     if (formatFilter) q += ` f:${formatFilter}`;
@@ -93,14 +133,14 @@ export default function CardSearch() {
     return q;
   }, [colorFilter, typeFilter, subtypeFilter, supertypeFilter, formatFilter, rarityFilter, cmcMin, cmcMax]);
 
-  const toggleType = (t: string) =>
-    setTypeFilter(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
+  const toggleType  = (t: string) => setTypeFilter((p) => p.includes(t) ? p.filter((x) => x !== t) : [...p, t]);
+  const toggleColor = (c: string) => setColorFilter((p) => p.includes(c) ? p.filter((x) => x !== c) : [...p, c]);
 
   const runSearch = async (baseQ: string, pg = 1) => {
     if (!baseQ.trim()) return;
     const q = buildQuery(baseQ);
     setLastQ(baseQ);
-    if (pg === 1) { setBusy(true); setResults([]); setPage(1); }
+    if (pg === 1) { setBusy(true); setResults([]); setAllResults([]); setPage(1); }
     else setLoadingMore(true);
     try {
       const { data, total: t, hasMore: hm } = await searchCards(q, pg);
@@ -115,6 +155,53 @@ export default function CardSearch() {
       setBusy(false);
       setLoadingMore(false);
     }
+  };
+
+  // Fetch ALL pages for export (up to 500 cards)
+  const fetchAllForExport = async (): Promise<ScryfallCard[]> => {
+    if (allResults.length > 0) return allResults;
+    setLoadingAll(true);
+    const q = buildQuery(lastQ);
+    let all: ScryfallCard[] = [];
+    let pg = 1;
+    let hm = true;
+    while (hm && all.length < 500) {
+      try {
+        const { data, hasMore } = await searchCards(q, pg);
+        all = [...all, ...data];
+        hm = hasMore;
+        pg++;
+      } catch { break; }
+    }
+    setAllResults(all);
+    setLoadingAll(false);
+    return all;
+  };
+
+  const openExport = async () => {
+    await fetchAllForExport();
+    setExportOpen(true);
+    setCopied(false);
+  };
+
+  const exportText = buildExportText(allResults.length > 0 ? allResults : results, exportFmt);
+
+  const copyExport = () => {
+    navigator.clipboard.writeText(exportText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast.success("Copied to clipboard");
+  };
+
+  const downloadExport = () => {
+    const ext = exportFmt === "csv" ? "csv" : "txt";
+    const blob = new Blob([exportText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mtg-search-${Date.now()}.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const onSubmit = (e: React.FormEvent) => {
@@ -139,15 +226,9 @@ export default function CardSearch() {
   };
 
   const pickSuggestion = (s: string) => {
-    setQuery(s);
-    setSuggestions([]);
-    setShowSuggestions(false);
-    setParams({ q: s });
-    runSearch(s, 1);
+    setQuery(s); setSuggestions([]); setShowSuggestions(false);
+    setParams({ q: s }); runSearch(s, 1);
   };
-
-  const toggleColor = (c: string) =>
-    setColorFilter((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]);
 
   const addToCollection = async (card: ScryfallCard) => {
     setAdding(card.id);
@@ -174,19 +255,34 @@ export default function CardSearch() {
     else toast.success(`Added ${card.name} to your collection`);
   };
 
-  const activeFilters = colorFilter.length + typeFilter.length + (subtypeFilter ? 1 : 0) + (supertypeFilter ? 1 : 0) + (formatFilter ? 1 : 0) + (rarityFilter ? 1 : 0) + (cmcMin ? 1 : 0) + (cmcMax ? 1 : 0);
+  const activeFilters = colorFilter.length + typeFilter.length + (subtypeFilter ? 1 : 0) +
+    (supertypeFilter ? 1 : 0) + (formatFilter ? 1 : 0) + (rarityFilter ? 1 : 0) +
+    (cmcMin ? 1 : 0) + (cmcMax ? 1 : 0);
 
   const clearFilters = () => {
-    setColorFilter([]); setTypeFilter([]); setSubtypeFilter("");
-    setSupertypeFilter(""); setFormatFilter(""); setRarityFilter("");
-    setCmcMin(""); setCmcMax("");
+    setColorFilter([]); setTypeFilter([]); setSubtypeFilter(""); setSupertypeFilter("");
+    setFormatFilter(""); setRarityFilter(""); setCmcMin(""); setCmcMax("");
   };
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="font-fantasy text-3xl font-bold text-gradient-gold md:text-4xl">Multiverse Search</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Browse every Magic card via Scryfall. Add directly to your inventory.</p>
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="font-fantasy text-3xl font-bold text-gradient-gold md:text-4xl">Multiverse Search</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Browse every Magic card via Scryfall. Add directly to your inventory.</p>
+        </div>
+        {results.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-border/60 gap-1.5 shrink-0"
+            onClick={openExport}
+            disabled={loadingAll}
+          >
+            {loadingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            Export results
+          </Button>
+        )}
       </div>
 
       {/* Search bar + autocomplete */}
@@ -208,10 +304,7 @@ export default function CardSearch() {
             {showSuggestions && suggestions.length > 0 && (
               <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-lg border border-border bg-card shadow-[var(--shadow-elevated)] overflow-hidden">
                 {suggestions.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onMouseDown={() => pickSuggestion(s)}
+                  <button key={s} type="button" onMouseDown={() => pickSuggestion(s)}
                     className="w-full px-4 py-2.5 text-left text-sm hover:bg-secondary/60 transition-colors font-fantasy"
                   >{s}</button>
                 ))}
@@ -223,112 +316,73 @@ export default function CardSearch() {
           </Button>
         </div>
 
-        {/* Advanced filters toggle */}
+        {/* Filters toggle */}
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowAdvanced((v) => !v)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
+          <button type="button" onClick={() => setShowAdvanced((v) => !v)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
             <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAdvanced && "rotate-180")} />
             Filters
             {activeFilters > 0 && <span className="rounded-full bg-primary/20 text-primary px-1.5 py-0.5 text-[10px] font-bold">{activeFilters} active</span>}
           </button>
           {activeFilters > 0 && (
-            <button type="button" onClick={clearFilters} className="text-[10px] text-muted-foreground/60 hover:text-destructive transition-colors">
-              Clear all
-            </button>
+            <button type="button" onClick={clearFilters} className="text-[10px] text-muted-foreground/60 hover:text-destructive transition-colors">Clear all</button>
           )}
         </div>
 
         {showAdvanced && (
           <div className="rounded-xl border border-border/60 bg-card p-4 space-y-5 animate-fade-in">
-
-            {/* ── Card Type ── */}
+            {/* Card Type */}
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Card type</p>
               <div className="flex flex-wrap gap-1.5">
-                {CARD_TYPES.map((t) => {
-                  const active = typeFilter.includes(t.query);
-                  return (
-                    <button
-                      key={t.query}
-                      type="button"
-                      onClick={() => toggleType(t.query)}
-                      className={cn(
-                        "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all",
-                        active
-                          ? "border-primary/60 bg-primary/15 text-primary ring-1 ring-primary/20"
-                          : "border-border/50 bg-secondary/30 text-muted-foreground hover:border-border hover:text-foreground"
-                      )}
-                    >
-                      <span className="text-base leading-none">{t.icon}</span>
-                      {t.label}
-                    </button>
-                  );
-                })}
+                {CARD_TYPES.map((t) => (
+                  <button key={t.query} type="button" onClick={() => toggleType(t.query)}
+                    className={cn("flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all",
+                      typeFilter.includes(t.query)
+                        ? "border-primary/60 bg-primary/15 text-primary ring-1 ring-primary/20"
+                        : "border-border/50 bg-secondary/30 text-muted-foreground hover:border-border hover:text-foreground"
+                    )}>
+                    <span className="text-base leading-none">{t.icon}</span>{t.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* ── Supertype ── */}
+            {/* Supertype */}
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Supertype</p>
               <div className="flex flex-wrap gap-1.5">
-                {SUPERTYPES.map((s) => {
-                  const active = supertypeFilter === s.toLowerCase();
-                  return (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setSupertypeFilter(active ? "" : s.toLowerCase())}
-                      className={cn(
-                        "rounded-lg border px-2.5 py-1 text-xs font-medium transition-all",
-                        active
-                          ? "border-primary/60 bg-primary/15 text-primary ring-1 ring-primary/20"
-                          : "border-border/50 bg-secondary/30 text-muted-foreground hover:border-border hover:text-foreground"
-                      )}
-                    >
-                      {s}
-                    </button>
-                  );
-                })}
+                {SUPERTYPES.map((s) => (
+                  <button key={s} type="button" onClick={() => setSupertypeFilter(supertypeFilter === s.toLowerCase() ? "" : s.toLowerCase())}
+                    className={cn("rounded-lg border px-2.5 py-1 text-xs font-medium transition-all",
+                      supertypeFilter === s.toLowerCase()
+                        ? "border-primary/60 bg-primary/15 text-primary"
+                        : "border-border/50 bg-secondary/30 text-muted-foreground hover:border-border hover:text-foreground"
+                    )}>{s}</button>
+                ))}
               </div>
             </div>
 
-            {/* ── Subtype / Tribe ── */}
+            {/* Subtype */}
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Subtype / Tribe</p>
               <div className="flex flex-wrap gap-1.5 mb-2">
-                {SUBTYPES.map((s) => {
-                  const active = subtypeFilter.toLowerCase() === s.toLowerCase();
-                  return (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setSubtypeFilter(active ? "" : s)}
-                      className={cn(
-                        "rounded-lg border px-2.5 py-1 text-xs transition-all",
-                        active
-                          ? "border-accent/60 bg-accent/15 text-accent ring-1 ring-accent/20"
-                          : "border-border/50 bg-secondary/30 text-muted-foreground hover:border-border hover:text-foreground"
-                      )}
-                    >
-                      {s}
-                    </button>
-                  );
-                })}
+                {SUBTYPES.map((s) => (
+                  <button key={s} type="button" onClick={() => setSubtypeFilter(subtypeFilter.toLowerCase() === s.toLowerCase() ? "" : s)}
+                    className={cn("rounded-lg border px-2.5 py-1 text-xs transition-all",
+                      subtypeFilter.toLowerCase() === s.toLowerCase()
+                        ? "border-accent/60 bg-accent/15 text-accent"
+                        : "border-border/50 bg-secondary/30 text-muted-foreground hover:border-border hover:text-foreground"
+                    )}>{s}</button>
+                ))}
               </div>
-              <Input
-                value={subtypeFilter}
-                onChange={(e) => setSubtypeFilter(e.target.value)}
+              <Input value={subtypeFilter} onChange={(e) => setSubtypeFilter(e.target.value)}
                 placeholder="Or type any subtype (e.g. Pirate, Elemental, Saga…)"
-                className="h-8 text-xs bg-secondary/30 border-border/50"
-              />
+                className="h-8 text-xs bg-secondary/30 border-border/50" />
             </div>
 
-            {/* ── Row: Color · Rarity · Format · CMC — inline ── */}
+            {/* Color · Rarity · Format · CMC */}
             <div className="flex flex-wrap items-start gap-6">
-              {/* Color */}
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Color</p>
                 <div className="flex gap-1.5">
@@ -340,41 +394,31 @@ export default function CardSearch() {
                   ))}
                 </div>
               </div>
-
-              {/* Rarity */}
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Rarity</p>
                 <div className="flex gap-1">
                   {["C","U","R","M"].map((r, i) => {
                     const full = ["common","uncommon","rare","mythic"][i];
-                    const active = rarityFilter === full;
-                    const colors = ["text-rarity-common border-rarity-common/40","text-rarity-uncommon border-rarity-uncommon/50","text-rarity-rare border-rarity-rare/60","text-rarity-mythic border-rarity-mythic/60"][i];
+                    const cls  = ["text-rarity-common border-rarity-common/40","text-rarity-uncommon border-rarity-uncommon/50","text-rarity-rare border-rarity-rare/60","text-rarity-mythic border-rarity-mythic/60"][i];
                     return (
-                      <button key={r} type="button"
-                        onClick={() => setRarityFilter(active ? "" : full)}
-                        className={cn("h-7 w-7 rounded border text-[10px] font-bold transition-all", colors,
-                          active ? "bg-secondary ring-1 ring-current" : "bg-secondary/30 opacity-50 hover:opacity-80"
-                        )}>
-                        {r}
-                      </button>
+                      <button key={r} type="button" onClick={() => setRarityFilter(rarityFilter === full ? "" : full)}
+                        className={cn("h-7 w-7 rounded border text-[10px] font-bold transition-all", cls,
+                          rarityFilter === full ? "bg-secondary ring-1 ring-current" : "bg-secondary/30 opacity-50 hover:opacity-80"
+                        )}>{r}</button>
                     );
                   })}
                 </div>
               </div>
-
-              {/* Format */}
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Format</p>
                 <select value={formatFilter} onChange={(e) => setFormatFilter(e.target.value)}
-                  className="h-8 rounded border border-border/60 bg-secondary/40 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 capitalize">
+                  className="h-8 rounded border border-border/60 bg-secondary/40 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
                   <option value="">Any</option>
                   {FORMATS.map((f) => <option key={f} value={f} className="capitalize">{f}</option>)}
                 </select>
               </div>
-
-              {/* Mana Value */}
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Mana value (CMC)</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">CMC</p>
                 <div className="flex items-center gap-1">
                   <Input value={cmcMin} onChange={(e) => setCmcMin(e.target.value)} placeholder="Min" className="h-8 w-14 text-xs" type="number" min={0} />
                   <span className="text-muted-foreground text-xs">–</span>
@@ -383,42 +427,21 @@ export default function CardSearch() {
               </div>
             </div>
 
-            {/* Active filter chips */}
+            {/* Active chips */}
             {activeFilters > 0 && (
               <div className="flex flex-wrap gap-1.5 pt-1 border-t border-border/40">
-                {typeFilter.map(t => (
+                {typeFilter.map((t) => (
                   <span key={t} onClick={() => toggleType(t)} className="flex items-center gap-1 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[11px] cursor-pointer hover:bg-primary/25">
-                    {CARD_TYPES.find(x => x.query === t)?.icon} {CARD_TYPES.find(x => x.query === t)?.label ?? t} ×
+                    {CARD_TYPES.find((x) => x.query === t)?.icon} {CARD_TYPES.find((x) => x.query === t)?.label ?? t} ×
                   </span>
                 ))}
-                {supertypeFilter && (
-                  <span onClick={() => setSupertypeFilter("")} className="flex items-center gap-1 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[11px] cursor-pointer hover:bg-primary/25">
-                    {supertypeFilter} ×
-                  </span>
-                )}
-                {subtypeFilter && (
-                  <span onClick={() => setSubtypeFilter("")} className="flex items-center gap-1 rounded-full bg-accent/15 text-accent px-2 py-0.5 text-[11px] cursor-pointer hover:bg-accent/25">
-                    {subtypeFilter} ×
-                  </span>
-                )}
-                {colorFilter.map(c => (
-                  <span key={c} onClick={() => toggleColor(c)} className="flex items-center gap-1 rounded-full bg-secondary text-foreground px-2 py-0.5 text-[11px] cursor-pointer hover:bg-secondary/60">
-                    {c} ×
-                  </span>
-                ))}
-                {formatFilter && (
-                  <span onClick={() => setFormatFilter("")} className="flex items-center gap-1 rounded-full bg-secondary text-foreground px-2 py-0.5 text-[11px] cursor-pointer hover:bg-secondary/60">
-                    {formatFilter} ×
-                  </span>
-                )}
-                {rarityFilter && (
-                  <span onClick={() => setRarityFilter("")} className="flex items-center gap-1 rounded-full bg-secondary text-foreground px-2 py-0.5 text-[11px] cursor-pointer hover:bg-secondary/60">
-                    {rarityFilter} ×
-                  </span>
-                )}
+                {supertypeFilter && <span onClick={() => setSupertypeFilter("")} className="flex items-center gap-1 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[11px] cursor-pointer hover:bg-primary/25">{supertypeFilter} ×</span>}
+                {subtypeFilter && <span onClick={() => setSubtypeFilter("")} className="flex items-center gap-1 rounded-full bg-accent/15 text-accent px-2 py-0.5 text-[11px] cursor-pointer hover:bg-accent/25">{subtypeFilter} ×</span>}
+                {colorFilter.map((c) => <span key={c} onClick={() => toggleColor(c)} className="flex items-center gap-1 rounded-full bg-secondary text-foreground px-2 py-0.5 text-[11px] cursor-pointer hover:bg-secondary/60">{c} ×</span>)}
+                {formatFilter && <span onClick={() => setFormatFilter("")} className="flex items-center gap-1 rounded-full bg-secondary text-foreground px-2 py-0.5 text-[11px] cursor-pointer">{formatFilter} ×</span>}
+                {rarityFilter && <span onClick={() => setRarityFilter("")} className="flex items-center gap-1 rounded-full bg-secondary text-foreground px-2 py-0.5 text-[11px] cursor-pointer">{rarityFilter} ×</span>}
               </div>
             )}
-
           </div>
         )}
       </form>
@@ -430,35 +453,29 @@ export default function CardSearch() {
       )}
 
       {results.length > 0 && (
-        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          {total.toLocaleString()} cards found · showing {results.length}
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            {total.toLocaleString()} cards found · showing {results.length}
+          </p>
+        </div>
       )}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {results.map((c) => {
-          const img = getCardImage(c);
+          const img    = getCardImage(c);
           const rarity = c.rarity ?? "common";
           return (
             <div key={c.id} className="group relative overflow-hidden rounded-xl border border-border bg-card p-3 card-hover">
-              <button
-                type="button"
-                onClick={() => setOpenId(c.id)}
-                className="block w-full aspect-[488/680] overflow-hidden rounded-md bg-secondary ring-1 ring-border focus:outline-none focus:ring-2 focus:ring-primary"
-                aria-label={`Open ${c.name} details`}
-              >
-                {img ? (
-                  <img src={img} alt={c.name} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                ) : (
-                  <div className="flex h-full items-center justify-center p-2 text-center text-xs text-muted-foreground">{c.name}</div>
-                )}
+              <button type="button" onClick={() => setOpenId(c.id)}
+                className="block w-full aspect-[488/680] overflow-hidden rounded-md bg-secondary ring-1 ring-border focus:outline-none focus:ring-2 focus:ring-primary">
+                {img
+                  ? <img src={img} alt={c.name} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  : <div className="flex h-full items-center justify-center p-2 text-center text-xs text-muted-foreground">{c.name}</div>}
               </button>
               <div className="mt-3 space-y-1.5">
                 <p className="line-clamp-1 font-fantasy text-sm font-semibold">{c.name}</p>
                 <div className="flex items-center justify-between gap-1">
-                  <Badge variant="outline" className={`text-[10px] uppercase ${RARITY_CLASS[rarity] ?? RARITY_CLASS.common}`}>
-                    {rarity}
-                  </Badge>
+                  <Badge variant="outline" className={`text-[10px] uppercase ${RARITY_CLASS[rarity] ?? RARITY_CLASS.common}`}>{rarity}</Badge>
                   {c.prices?.usd && <span className="text-xs text-mana-green">${c.prices.usd}</span>}
                 </div>
                 <Button size="sm" variant="secondary" className="w-full h-8" disabled={adding === c.id} onClick={() => addToCollection(c)}>
@@ -470,26 +487,59 @@ export default function CardSearch() {
         })}
       </div>
 
-      {/* Load more */}
       {hasMore && (
         <div className="flex justify-center pt-2">
-          <Button
-            variant="outline"
-            className="border-border/60 px-8"
-            disabled={loadingMore}
-            onClick={() => runSearch(lastQ, page + 1)}
-          >
+          <Button variant="outline" className="border-border/60 px-8" disabled={loadingMore}
+            onClick={() => runSearch(lastQ, page + 1)}>
             {loadingMore ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…</> : "Load more results"}
           </Button>
         </div>
       )}
 
-      <CardDetailModal
-        cardId={openId}
-        siblingIds={results.map((r) => r.id)}
-        onChangeCardId={setOpenId}
-        onClose={() => setOpenId(null)}
-      />
+      <CardDetailModal cardId={openId} siblingIds={results.map((r) => r.id)} onChangeCardId={setOpenId} onClose={() => setOpenId(null)} />
+
+      {/* Export dialog */}
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+        <DialogContent className="max-w-2xl border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="font-fantasy text-xl text-gradient-gold flex items-center gap-2">
+              <Download className="h-5 w-5 text-primary" /> Export Search Results
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              {allResults.length > 0 ? `${allResults.length} cards` : `${results.length} cards (visible page)`} · Choose format then copy or download.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            {/* Format selector */}
+            <div className="flex gap-2">
+              {([
+                { id: "arena", icon: <FileText className="h-3.5 w-3.5" />, label: "Arena / MTGO" },
+                { id: "csv",   icon: <FileText className="h-3.5 w-3.5" />, label: "CSV" },
+                { id: "text",  icon: <FileText className="h-3.5 w-3.5" />, label: "Plain text" },
+              ] as const).map((f) => (
+                <button key={f.id} type="button" onClick={() => setExportFmt(f.id)}
+                  className={cn("flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all",
+                    exportFmt === f.id ? "border-primary/60 bg-primary/10 text-primary" : "border-border/60 text-muted-foreground hover:border-primary/30"
+                  )}>
+                  {f.icon}{f.label}
+                </button>
+              ))}
+            </div>
+
+            <Textarea value={exportText} readOnly className="min-h-[240px] font-mono text-xs bg-secondary/40 border-border/60 resize-none" />
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={downloadExport} className="border-border/60">
+                <Download className="mr-1.5 h-4 w-4" /> Download
+              </Button>
+              <Button onClick={copyExport} className="bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90">
+                {copied ? <><Check className="mr-1.5 h-4 w-4" /> Copied!</> : <><Copy className="mr-1.5 h-4 w-4" /> Copy</>}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

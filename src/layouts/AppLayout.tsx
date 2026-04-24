@@ -2,7 +2,7 @@ import { Outlet, useNavigate, NavLink, useLocation } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Button } from "@/components/ui/button";
-import { LogOut, Search, LayoutDashboard, Library, LayersIcon, Sparkles, Heart } from "lucide-react";
+import { LogOut, Search, LayoutDashboard, Library, LayersIcon, Sparkles, Heart, BookOpen } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,6 +17,7 @@ const mobileNav = [
   { title: "Decks",      url: "/app/decks",      icon: LayersIcon },
   { title: "Decksmith",  url: "/app/decksmith",  icon: Sparkles },
   { title: "Wishlist",   url: "/app/wishlist",   icon: Heart },
+  { title: "Guide",      url: "/app/forge-guide", icon: BookOpen },
 ];
 
 export function AppLayout() {
