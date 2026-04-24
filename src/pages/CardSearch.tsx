@@ -28,14 +28,14 @@ const MANA_COLORS = [
 const FORMATS = ["standard","pioneer","modern","legacy","vintage","commander","pauper"];
 
 const CARD_TYPES = [
-  { label: "Creature",      icon: "🐉", query: "creature" },
-  { label: "Instant",       icon: "⚡", query: "instant" },
-  { label: "Sorcery",       icon: "🌀", query: "sorcery" },
-  { label: "Enchantment",   icon: "✨", query: "enchantment" },
-  { label: "Artifact",      icon: "⚙️", query: "artifact" },
-  { label: "Planeswalker",  icon: "🧙", query: "planeswalker" },
-  { label: "Land",          icon: "🏔️", query: "land" },
-  { label: "Battle",        icon: "⚔️", query: "battle" },
+  { label: "Creature",     query: "creature" },
+  { label: "Instant",      query: "instant" },
+  { label: "Sorcery",      query: "sorcery" },
+  { label: "Enchantment",  query: "enchantment" },
+  { label: "Artifact",     query: "artifact" },
+  { label: "Planeswalker", query: "planeswalker" },
+  { label: "Land",         query: "land" },
+  { label: "Battle",       query: "battle" },
 ];
 
 const SUBTYPES = [
@@ -246,7 +246,7 @@ export default function CardSearch() {
 
             {/* ── Card Type ── */}
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Card Type</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Card type</p>
               <div className="flex flex-wrap gap-1.5">
                 {CARD_TYPES.map((t) => {
                   const active = typeFilter.includes(t.query);
@@ -256,13 +256,12 @@ export default function CardSearch() {
                       type="button"
                       onClick={() => toggleType(t.query)}
                       className={cn(
-                        "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all",
+                        "px-3 py-1 rounded-full text-[11px] font-medium border transition-all",
                         active
-                          ? "border-primary/60 bg-primary/15 text-primary ring-1 ring-primary/20"
-                          : "border-border/50 bg-secondary/30 text-muted-foreground hover:border-border hover:text-foreground"
+                          ? "border-primary/60 bg-primary/12 text-primary shadow-[0_0_8px_hsl(var(--primary)/0.2)]"
+                          : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
                       )}
                     >
-                      <span className="text-base leading-none">{t.icon}</span>
                       {t.label}
                     </button>
                   );
@@ -326,11 +325,12 @@ export default function CardSearch() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {/* ── Row: Color · Rarity · Format · CMC — inline ── */}
+            <div className="flex flex-wrap items-start gap-6">
               {/* Color */}
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Color</p>
-                <div className="flex gap-1">
+                <div className="flex gap-1.5">
                   {MANA_COLORS.map((c) => (
                     <button key={c.code} type="button" onClick={() => toggleColor(c.code)}
                       className={cn("h-7 w-7 rounded-full text-[11px] font-bold ring-2 transition-all", c.bg, c.text,
@@ -340,20 +340,10 @@ export default function CardSearch() {
                 </div>
               </div>
 
-              {/* Format */}
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Format</p>
-                <select value={formatFilter} onChange={(e) => setFormatFilter(e.target.value)}
-                  className="h-8 w-full rounded border border-border/60 bg-secondary/40 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 capitalize">
-                  <option value="">Any</option>
-                  {FORMATS.map((f) => <option key={f} value={f} className="capitalize">{f}</option>)}
-                </select>
-              </div>
-
               {/* Rarity */}
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Rarity</p>
-                <div className="flex flex-wrap gap-1">
+                <div className="flex gap-1">
                   {["C","U","R","M"].map((r, i) => {
                     const full = ["common","uncommon","rare","mythic"][i];
                     const active = rarityFilter === full;
@@ -371,9 +361,19 @@ export default function CardSearch() {
                 </div>
               </div>
 
-              {/* CMC */}
+              {/* Format */}
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Mana Value</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Format</p>
+                <select value={formatFilter} onChange={(e) => setFormatFilter(e.target.value)}
+                  className="h-8 rounded border border-border/60 bg-secondary/40 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 capitalize">
+                  <option value="">Any</option>
+                  {FORMATS.map((f) => <option key={f} value={f} className="capitalize">{f}</option>)}
+                </select>
+              </div>
+
+              {/* Mana Value */}
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Mana value (CMC)</p>
                 <div className="flex items-center gap-1">
                   <Input value={cmcMin} onChange={(e) => setCmcMin(e.target.value)} placeholder="Min" className="h-8 w-14 text-xs" type="number" min={0} />
                   <span className="text-muted-foreground text-xs">–</span>
@@ -387,7 +387,7 @@ export default function CardSearch() {
               <div className="flex flex-wrap gap-1.5 pt-1 border-t border-border/40">
                 {typeFilter.map(t => (
                   <span key={t} onClick={() => toggleType(t)} className="flex items-center gap-1 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[11px] cursor-pointer hover:bg-primary/25">
-                    {CARD_TYPES.find(x => x.query === t)?.icon} {t} ×
+                    {CARD_TYPES.find(x => x.query === t)?.label ?? t} ×
                   </span>
                 ))}
                 {supertypeFilter && (
