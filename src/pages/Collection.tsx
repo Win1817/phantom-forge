@@ -564,59 +564,72 @@ export default function Collection() {
               </Button>
             )}
           </div>
-          <div className="flex flex-wrap gap-4">
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Color</p>
-              <div className="flex gap-1.5">
-                {MANA_COLORS.map(c => (
-                  <button key={c.code} onClick={() => toggleColor(c.code)} title={c.label}
-                    className={cn("h-7 w-7 rounded-full text-[11px] font-bold ring-2 transition-all", c.bg, c.text,
-                      colorFilter.includes(c.code) ? "ring-primary scale-110" : "ring-transparent opacity-50 hover:opacity-80"
-                    )}>{c.code}</button>
-                ))}
+          <div className="space-y-4">
+
+            {/* Row 1: Color + Rarity + Foil + CMC inline */}
+            <div className="flex flex-wrap items-start gap-6">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Color</p>
+                <div className="flex gap-1.5">
+                  {MANA_COLORS.map(c => (
+                    <button key={c.code} onClick={() => toggleColor(c.code)} title={c.label}
+                      className={cn("h-7 w-7 rounded-full text-[11px] font-bold ring-2 transition-all", c.bg, c.text,
+                        colorFilter.includes(c.code) ? "ring-primary scale-110" : "ring-transparent opacity-50 hover:opacity-80"
+                      )}>{c.code}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Rarity</p>
+                <div className="flex gap-1">
+                  {RARITIES.map(r => (
+                    <button key={r} onClick={() => toggleRarity(r)}
+                      className={cn("px-2.5 py-1 rounded text-[10px] uppercase font-medium border transition-all",
+                        rarityFilter.includes(r) ? "border-primary/50 bg-primary/10 text-primary" : "border-border/60 text-muted-foreground hover:border-primary/30"
+                      )}>{r}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Foil</p>
+                <div className="flex gap-1">
+                  {([null, true, false] as const).map(v => (
+                    <button key={String(v)} onClick={() => setFoilFilter(v)}
+                      className={cn("px-2.5 py-1 rounded text-[10px] uppercase font-medium border transition-all",
+                        foilFilter === v ? "border-primary/50 bg-primary/10 text-primary" : "border-border/60 text-muted-foreground hover:border-primary/30"
+                      )}>{v === null ? "All" : v ? "Foil" : "Non-foil"}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Mana cost (CMC)</p>
+                <div className="flex items-center gap-1.5">
+                  <Input value={cmcMin} onChange={e => setCmcMin(e.target.value)} placeholder="Min" className="h-7 w-14 text-xs" type="number" min={0} />
+                  <span className="text-muted-foreground text-xs">–</span>
+                  <Input value={cmcMax} onChange={e => setCmcMax(e.target.value)} placeholder="Max" className="h-7 w-14 text-xs" type="number" min={0} />
+                </div>
               </div>
             </div>
+
+            {/* Row 2: Card type — full width, always on its own line */}
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Rarity</p>
-              <div className="flex gap-1">
-                {RARITIES.map(r => (
-                  <button key={r} onClick={() => toggleRarity(r)}
-                    className={cn("px-2.5 py-1 rounded text-[10px] uppercase font-medium border transition-all",
-                      rarityFilter.includes(r) ? "border-primary/50 bg-primary/10 text-primary" : "border-border/60 text-muted-foreground hover:border-primary/30"
-                    )}>{r}</button>
-                ))}
-              </div>
-            </div>
-            <div className="w-full">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Card type</p>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-1.5">
                 {CARD_TYPES.map(t => (
                   <button key={t.key} onClick={() => toggleType(t.key)}
-                    className={cn("px-2.5 py-1 rounded text-[10px] font-medium border transition-all",
-                      typeFilter.includes(t.key) ? "border-primary/50 bg-primary/10 text-primary" : "border-border/60 text-muted-foreground hover:border-primary/30"
+                    className={cn(
+                      "px-3 py-1 rounded-full text-[11px] font-medium border transition-all",
+                      typeFilter.includes(t.key)
+                        ? "border-primary/60 bg-primary/12 text-primary shadow-[0_0_8px_hsl(var(--primary)/0.2)]"
+                        : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
                     )}>{t.label}</button>
                 ))}
               </div>
             </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Foil</p>
-              <div className="flex gap-1">
-                {([null, true, false] as const).map(v => (
-                  <button key={String(v)} onClick={() => setFoilFilter(v)}
-                    className={cn("px-2.5 py-1 rounded text-[10px] uppercase font-medium border transition-all",
-                      foilFilter === v ? "border-primary/50 bg-primary/10 text-primary" : "border-border/60 text-muted-foreground hover:border-primary/30"
-                    )}>{v === null ? "All" : v ? "Foil" : "Non-foil"}</button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Mana cost (CMC)</p>
-              <div className="flex items-center gap-1.5">
-                <Input value={cmcMin} onChange={e => setCmcMin(e.target.value)} placeholder="Min" className="h-7 w-14 text-xs" type="number" min={0} />
-                <span className="text-muted-foreground text-xs">–</span>
-                <Input value={cmcMax} onChange={e => setCmcMax(e.target.value)} placeholder="Max" className="h-7 w-14 text-xs" type="number" min={0} />
-              </div>
-            </div>
+
           </div>
         </div>
       )}
