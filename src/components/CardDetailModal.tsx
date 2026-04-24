@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Plus, Library, Sparkles, X, Loader2, ExternalLink, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Library, Sparkles, X, Loader2, ExternalLink, Zap, Layers } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -208,6 +208,93 @@ const CardDetailModal = ({ cardId, siblingIds = [], onChangeCardId, onClose }: P
   );
 };
 
+
+// ─── Versions Tab ────────────────────────────────────────────────────────────
+
+interface Printing {
+  id: string;
+  set: string;
+  set_name: string;
+  collector_number: string;
+  rarity: string;
+  image_uris?: { normal?: string; small?: string };
+  card_faces?: Array<{ image_uris?: { normal?: string; small?: string } }>;
+  prices?: { usd?: string; usd_foil?: string };
+  released_at?: string;
+  scryfall_uri?: string;
+}
+
+const printingsCache = new Map<string, Printing[]>();
+
+const VersionsTab = ({ card }: { card: ScryfallCard }) => {
+  const [printings, setPrintings] = useState<Printing[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!card.prints_search_uri) return;
+    if (printingsCache.has(card.id)) { setPrintings(printingsCache.get(card.id)!); return; }
+    setLoading(true);
+    fetch(card.prints_search_uri + "&order=released&unique=prints")
+      .then(r => r.json())
+      .then(json => {
+        const data: Printing[] = json.data ?? [];
+        printingsCache.set(card.id, data);
+        setPrintings(data);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [card.id, card.prints_search_uri]);
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-12">
+      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+    </div>
+  );
+
+  if (!printings.length) return (
+    <p className="text-sm text-muted-foreground py-6 text-center">No printings found.</p>
+  );
+
+  const RARITY_C: Record<string, string> = {
+    common: "text-rarity-common", uncommon: "text-rarity-uncommon",
+    rare: "text-rarity-rare", mythic: "text-rarity-mythic",
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">{printings.length} printing{printings.length !== 1 ? "s" : ""} found</p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {printings.map(p => {
+          const img = p.image_uris?.small ?? p.card_faces?.[0]?.image_uris?.small;
+          const price = p.prices?.usd ? `$${p.prices.usd}` : p.prices?.usd_foil ? `✦ $${p.prices.usd_foil}` : null;
+          return (
+            <a key={p.id} href={p.scryfall_uri} target="_blank" rel="noreferrer"
+              className="group flex flex-col gap-1.5 rounded-xl border border-border/50 bg-secondary/20 p-2.5 hover:border-primary/40 hover:bg-secondary/40 transition-all">
+              {img && (
+                <div className="overflow-hidden rounded-lg">
+                  <img src={img} alt={p.set_name} loading="lazy"
+                    className="w-full h-auto object-cover group-hover:scale-[1.02] transition-transform duration-300" />
+                </div>
+              )}
+              <div className="space-y-0.5">
+                <p className="text-[11px] font-semibold text-foreground leading-tight truncate">{p.set_name}</p>
+                <div className="flex items-center justify-between gap-1">
+                  <span className={`text-[10px] uppercase font-medium ${RARITY_C[p.rarity] ?? ""}`}>{p.rarity}</span>
+                  <span className="text-[10px] text-muted-foreground">#{p.collector_number}</span>
+                </div>
+                {price && <p className="text-[10px] text-mana-green font-medium">{price}</p>}
+                {p.released_at && (
+                  <p className="text-[10px] text-muted-foreground/50">{p.released_at.slice(0, 4)}</p>
+                )}
+              </div>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // ─── Body ───────────────────────────────────────────────────────────────────
 
 interface BodyProps {
@@ -239,6 +326,8 @@ const CardDetailBody = ({
       </div>
     );
   }
+
+  const [activeTab, setActiveTab] = useState<"details" | "versions">("details");
 
   const face      = card.card_faces?.[0];
   const img       = getCardImageLarge(card);
@@ -322,8 +411,29 @@ const CardDetailBody = ({
         </a>
       </div>
 
+      {/* ── Tab switcher ── */}
+      <div className="flex gap-1 p-1 rounded-lg bg-secondary/40 border border-border/50">
+        {([
+          { key: "details",  label: "Details",  icon: Zap },
+          { key: "versions", label: "Versions", icon: Layers },
+        ] as const).map(({ key, label, icon: Icon }) => (
+          <button key={key} type="button" onClick={() => setActiveTab(key)}
+            className={`flex flex-1 items-center justify-center gap-1.5 py-1.5 px-3 text-sm font-medium rounded-md transition-all duration-200 ${
+              activeTab === key
+                ? "bg-card text-foreground shadow-sm ring-1 ring-border/60"
+                : "text-muted-foreground hover:text-foreground"
+            }`}>
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Versions tab ── */}
+      {activeTab === "versions" && <VersionsTab card={card} />}
+
       {/* ── MOBILE layout ── */}
-      {isMobile ? (
+      {activeTab === "details" && isMobile ? (
         <>
           {/* Top row: image left, info right */}
           <div className="flex gap-3">
@@ -372,7 +482,7 @@ const CardDetailBody = ({
             ai={ai} aiLoading={aiLoading} aiError={aiError} onExplain={onExplain}
           />
         </>
-      ) : (
+      ) : activeTab === "details" ? (
         /* ── DESKTOP 2-column layout ── */
         <div className="grid gap-6 md:grid-cols-[minmax(0,260px)_1fr] lg:grid-cols-[minmax(0,300px)_1fr]">
           <div className="space-y-3">
@@ -399,7 +509,7 @@ const CardDetailBody = ({
             />
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

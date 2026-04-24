@@ -68,6 +68,17 @@ const MANA_COLORS = [
 ];
 const MANA_HEX: Record<string, string> = { W:"#f8e7a0", U:"#4a9de0", B:"#6b3fa0", R:"#e05535", G:"#3a9c5e" };
 const RARITIES = ["common", "uncommon", "rare", "mythic"];
+const CARD_TYPES = [
+  { key: "creature",    label: "Creature" },
+  { key: "instant",     label: "Instant" },
+  { key: "sorcery",     label: "Sorcery" },
+  { key: "enchantment", label: "Enchantment" },
+  { key: "artifact",    label: "Artifact" },
+  { key: "planeswalker",label: "Planeswalker" },
+  { key: "land",        label: "Land" },
+  { key: "battle",      label: "Battle" },
+] as const;
+type CardTypeKey = typeof CARD_TYPES[number]["key"];
 const SORT_OPTIONS = [
   { value: "added",    label: "Recently added" },
   { value: "name",     label: "Name A–Z" },
@@ -98,6 +109,7 @@ export default function Collection() {
   const [colorFilter, setColorFilter]   = useState<string[]>([]);
   const [rarityFilter, setRarityFilter] = useState<string[]>([]);
   const [foilFilter, setFoilFilter]     = useState<boolean | null>(null);
+  const [typeFilter, setTypeFilter]     = useState<CardTypeKey[]>([]);
   const [cmcMin, setCmcMin]             = useState("");
   const [cmcMax, setCmcMax]             = useState("");
   const [sortKey, setSortKey]           = useState<SortKey>("added");
@@ -254,9 +266,10 @@ export default function Collection() {
   };
 
   const toggleColor  = (c: string) => setColorFilter(p => p.includes(c) ? p.filter(x => x !== c) : [...p, c]);
+  const toggleType   = (t: CardTypeKey) => setTypeFilter(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t]);
   const toggleRarity = (r: string) => setRarityFilter(p => p.includes(r) ? p.filter(x => x !== r) : [...p, r]);
-  const activeFilterCount = colorFilter.length + rarityFilter.length + (foilFilter !== null ? 1 : 0) + (cmcMin ? 1 : 0) + (cmcMax ? 1 : 0);
-  const clearFilters = () => { setColorFilter([]); setRarityFilter([]); setFoilFilter(null); setCmcMin(""); setCmcMax(""); setFilter(""); };
+  const activeFilterCount = colorFilter.length + rarityFilter.length + typeFilter.length + (foilFilter !== null ? 1 : 0) + (cmcMin ? 1 : 0) + (cmcMax ? 1 : 0);
+  const clearFilters = () => { setColorFilter([]); setRarityFilter([]); setTypeFilter([]); setFoilFilter(null); setCmcMin(""); setCmcMax(""); setFilter(""); };
 
   // ── Filtered + sorted list ─────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -265,6 +278,7 @@ export default function Collection() {
       if (filter && !c.card_name.toLowerCase().includes(filter.toLowerCase())) return false;
       if (colorFilter.length && !colorFilter.some(col => c.colors?.includes(col))) return false;
       if (rarityFilter.length && !rarityFilter.includes(c.rarity ?? "")) return false;
+      if (typeFilter.length && !typeFilter.some(t => c.type_line?.toLowerCase().includes(t))) return false;
       if (foilFilter !== null && c.foil !== foilFilter) return false;
       if (cmcMin && (c.cmc ?? 0) < Number(cmcMin)) return false;
       if (cmcMax && (c.cmc ?? 0) > Number(cmcMax)) return false;
@@ -570,6 +584,17 @@ export default function Collection() {
                     className={cn("px-2.5 py-1 rounded text-[10px] uppercase font-medium border transition-all",
                       rarityFilter.includes(r) ? "border-primary/50 bg-primary/10 text-primary" : "border-border/60 text-muted-foreground hover:border-primary/30"
                     )}>{r}</button>
+                ))}
+              </div>
+            </div>
+            <div className="w-full">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Card type</p>
+              <div className="flex flex-wrap gap-1">
+                {CARD_TYPES.map(t => (
+                  <button key={t.key} onClick={() => toggleType(t.key)}
+                    className={cn("px-2.5 py-1 rounded text-[10px] font-medium border transition-all",
+                      typeFilter.includes(t.key) ? "border-primary/50 bg-primary/10 text-primary" : "border-border/60 text-muted-foreground hover:border-primary/30"
+                    )}>{t.label}</button>
                 ))}
               </div>
             </div>
