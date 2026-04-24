@@ -79,6 +79,14 @@ const CARD_TYPES = [
   { key: "battle",       label: "Battle",       icon: "⚔️" },
 ] as const;
 type CardTypeKey = typeof CARD_TYPES[number]["key"];
+
+const SUPERTYPES = ["Legendary", "Snow", "Basic", "Token", "World"];
+
+const SUBTYPES = [
+  "Dragon","Elf","Goblin","Vampire","Zombie","Merfolk",
+  "Angel","Demon","Wizard","Knight","Warrior","Beast",
+  "Human","Spirit","Eldrazi","Sliver",
+];
 const SORT_OPTIONS = [
   { value: "added",    label: "Recently added" },
   { value: "name",     label: "Name A–Z" },
@@ -109,7 +117,9 @@ export default function Collection() {
   const [colorFilter, setColorFilter]   = useState<string[]>([]);
   const [rarityFilter, setRarityFilter] = useState<string[]>([]);
   const [foilFilter, setFoilFilter]     = useState<boolean | null>(null);
-  const [typeFilter, setTypeFilter]     = useState<CardTypeKey[]>([]);
+  const [typeFilter, setTypeFilter]       = useState<CardTypeKey[]>([]);
+  const [supertypeFilter, setSupertypeFilter] = useState<string>("");
+  const [subtypeFilter, setSubtypeFilter]     = useState<string>("");
   const [cmcMin, setCmcMin]             = useState("");
   const [cmcMax, setCmcMax]             = useState("");
   const [sortKey, setSortKey]           = useState<SortKey>("added");
@@ -268,8 +278,8 @@ export default function Collection() {
   const toggleColor  = (c: string) => setColorFilter(p => p.includes(c) ? p.filter(x => x !== c) : [...p, c]);
   const toggleType   = (t: CardTypeKey) => setTypeFilter(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t]);
   const toggleRarity = (r: string) => setRarityFilter(p => p.includes(r) ? p.filter(x => x !== r) : [...p, r]);
-  const activeFilterCount = colorFilter.length + rarityFilter.length + typeFilter.length + (foilFilter !== null ? 1 : 0) + (cmcMin ? 1 : 0) + (cmcMax ? 1 : 0);
-  const clearFilters = () => { setColorFilter([]); setRarityFilter([]); setTypeFilter([]); setFoilFilter(null); setCmcMin(""); setCmcMax(""); setFilter(""); };
+  const activeFilterCount = colorFilter.length + rarityFilter.length + typeFilter.length + (supertypeFilter ? 1 : 0) + (subtypeFilter ? 1 : 0) + (foilFilter !== null ? 1 : 0) + (cmcMin ? 1 : 0) + (cmcMax ? 1 : 0);
+  const clearFilters = () => { setColorFilter([]); setRarityFilter([]); setTypeFilter([]); setSupertypeFilter(""); setSubtypeFilter(""); setFoilFilter(null); setCmcMin(""); setCmcMax(""); setFilter(""); };
 
   // ── Filtered + sorted list ─────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -279,6 +289,8 @@ export default function Collection() {
       if (colorFilter.length && !colorFilter.some(col => c.colors?.includes(col))) return false;
       if (rarityFilter.length && !rarityFilter.includes(c.rarity ?? "")) return false;
       if (typeFilter.length && !typeFilter.some(t => c.type_line?.toLowerCase().includes(t))) return false;
+      if (supertypeFilter && !c.type_line?.toLowerCase().includes(supertypeFilter.toLowerCase())) return false;
+      if (subtypeFilter && !c.type_line?.toLowerCase().includes(subtypeFilter.toLowerCase())) return false;
       if (foilFilter !== null && c.foil !== foilFilter) return false;
       if (cmcMin && (c.cmc ?? 0) < Number(cmcMin)) return false;
       if (cmcMax && (c.cmc ?? 0) > Number(cmcMax)) return false;
@@ -631,6 +643,54 @@ export default function Collection() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Row 3: Supertype */}
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Supertype</p>
+              <div className="flex flex-wrap gap-1.5">
+                {SUPERTYPES.map(s => {
+                  const active = supertypeFilter === s.toLowerCase();
+                  return (
+                    <button key={s} onClick={() => setSupertypeFilter(active ? "" : s.toLowerCase())}
+                      className={cn(
+                        "rounded-lg border px-2.5 py-1 text-xs font-medium transition-all",
+                        active
+                          ? "border-primary/60 bg-primary/15 text-primary ring-1 ring-primary/20"
+                          : "border-border/50 bg-secondary/30 text-muted-foreground hover:border-border hover:text-foreground"
+                      )}>
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Row 4: Subtype / Tribe */}
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Subtype / Tribe</p>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {SUBTYPES.map(s => {
+                  const active = subtypeFilter.toLowerCase() === s.toLowerCase();
+                  return (
+                    <button key={s} onClick={() => setSubtypeFilter(active ? "" : s)}
+                      className={cn(
+                        "rounded-lg border px-2.5 py-1 text-xs transition-all",
+                        active
+                          ? "border-accent/60 bg-accent/15 text-accent ring-1 ring-accent/20"
+                          : "border-border/50 bg-secondary/30 text-muted-foreground hover:border-border hover:text-foreground"
+                      )}>
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+              <Input
+                value={subtypeFilter}
+                onChange={e => setSubtypeFilter(e.target.value)}
+                placeholder="Or type any subtype (e.g. Pirate, Elemental, Saga…)"
+                className="h-8 text-xs bg-secondary/30 border-border/50"
+              />
             </div>
 
           </div>
