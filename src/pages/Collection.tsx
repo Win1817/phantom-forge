@@ -69,14 +69,14 @@ const MANA_COLORS = [
 const MANA_HEX: Record<string, string> = { W:"#f8e7a0", U:"#4a9de0", B:"#6b3fa0", R:"#e05535", G:"#3a9c5e" };
 const RARITIES = ["common", "uncommon", "rare", "mythic"];
 const CARD_TYPES = [
-  { key: "creature",    label: "Creature" },
-  { key: "instant",     label: "Instant" },
-  { key: "sorcery",     label: "Sorcery" },
-  { key: "enchantment", label: "Enchantment" },
-  { key: "artifact",    label: "Artifact" },
-  { key: "planeswalker",label: "Planeswalker" },
-  { key: "land",        label: "Land" },
-  { key: "battle",      label: "Battle" },
+  { key: "creature",     label: "Creature",     icon: "🐉" },
+  { key: "instant",      label: "Instant",      icon: "⚡" },
+  { key: "sorcery",      label: "Sorcery",      icon: "🌀" },
+  { key: "enchantment",  label: "Enchantment",  icon: "✨" },
+  { key: "artifact",     label: "Artifact",     icon: "⚙️" },
+  { key: "planeswalker", label: "Planeswalker", icon: "🧙" },
+  { key: "land",         label: "Land",         icon: "🏔️" },
+  { key: "battle",       label: "Battle",       icon: "⚔️" },
 ] as const;
 type CardTypeKey = typeof CARD_TYPES[number]["key"];
 const SORT_OPTIONS = [
@@ -621,11 +621,14 @@ export default function Collection() {
                 {CARD_TYPES.map(t => (
                   <button key={t.key} onClick={() => toggleType(t.key)}
                     className={cn(
-                      "px-3 py-1 rounded-full text-[11px] font-medium border transition-all",
+                      "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all",
                       typeFilter.includes(t.key)
-                        ? "border-primary/60 bg-primary/12 text-primary shadow-[0_0_8px_hsl(var(--primary)/0.2)]"
-                        : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                    )}>{t.label}</button>
+                        ? "border-primary/60 bg-primary/15 text-primary ring-1 ring-primary/20"
+                        : "border-border/50 bg-secondary/30 text-muted-foreground hover:border-border hover:text-foreground"
+                    )}>
+                    <span className="text-base leading-none">{t.icon}</span>
+                    {t.label}
+                  </button>
                 ))}
               </div>
             </div>

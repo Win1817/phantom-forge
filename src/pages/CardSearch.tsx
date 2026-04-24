@@ -28,14 +28,14 @@ const MANA_COLORS = [
 const FORMATS = ["standard","pioneer","modern","legacy","vintage","commander","pauper"];
 
 const CARD_TYPES = [
-  { label: "Creature",     query: "creature" },
-  { label: "Instant",      query: "instant" },
-  { label: "Sorcery",      query: "sorcery" },
-  { label: "Enchantment",  query: "enchantment" },
-  { label: "Artifact",     query: "artifact" },
-  { label: "Planeswalker", query: "planeswalker" },
-  { label: "Land",         query: "land" },
-  { label: "Battle",       query: "battle" },
+  { label: "Creature",     icon: "🐉", query: "creature" },
+  { label: "Instant",      icon: "⚡", query: "instant" },
+  { label: "Sorcery",      icon: "🌀", query: "sorcery" },
+  { label: "Enchantment",  icon: "✨", query: "enchantment" },
+  { label: "Artifact",     icon: "⚙️", query: "artifact" },
+  { label: "Planeswalker", icon: "🧙", query: "planeswalker" },
+  { label: "Land",         icon: "🏔️", query: "land" },
+  { label: "Battle",       icon: "⚔️", query: "battle" },
 ];
 
 const SUBTYPES = [
@@ -256,12 +256,13 @@ export default function CardSearch() {
                       type="button"
                       onClick={() => toggleType(t.query)}
                       className={cn(
-                        "px-3 py-1 rounded-full text-[11px] font-medium border transition-all",
+                        "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all",
                         active
-                          ? "border-primary/60 bg-primary/12 text-primary shadow-[0_0_8px_hsl(var(--primary)/0.2)]"
-                          : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                          ? "border-primary/60 bg-primary/15 text-primary ring-1 ring-primary/20"
+                          : "border-border/50 bg-secondary/30 text-muted-foreground hover:border-border hover:text-foreground"
                       )}
                     >
+                      <span className="text-base leading-none">{t.icon}</span>
                       {t.label}
                     </button>
                   );
@@ -387,7 +388,7 @@ export default function CardSearch() {
               <div className="flex flex-wrap gap-1.5 pt-1 border-t border-border/40">
                 {typeFilter.map(t => (
                   <span key={t} onClick={() => toggleType(t)} className="flex items-center gap-1 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[11px] cursor-pointer hover:bg-primary/25">
-                    {CARD_TYPES.find(x => x.query === t)?.label ?? t} ×
+                    {CARD_TYPES.find(x => x.query === t)?.icon} {CARD_TYPES.find(x => x.query === t)?.label ?? t} ×
                   </span>
                 ))}
                 {supertypeFilter && (
