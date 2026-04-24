@@ -26,7 +26,25 @@ const MANA_COLORS = [
 ];
 
 const FORMATS = ["standard","pioneer","modern","legacy","vintage","commander","pauper"];
-const TYPES   = ["Creature","Instant","Sorcery","Enchantment","Artifact","Planeswalker","Land"];
+
+const CARD_TYPES = [
+  { label: "Creature",      icon: "🐉", query: "creature" },
+  { label: "Instant",       icon: "⚡", query: "instant" },
+  { label: "Sorcery",       icon: "🌀", query: "sorcery" },
+  { label: "Enchantment",   icon: "✨", query: "enchantment" },
+  { label: "Artifact",      icon: "⚙️", query: "artifact" },
+  { label: "Planeswalker",  icon: "🧙", query: "planeswalker" },
+  { label: "Land",          icon: "🏔️", query: "land" },
+  { label: "Battle",        icon: "⚔️", query: "battle" },
+];
+
+const SUBTYPES = [
+  "Dragon","Elf","Goblin","Vampire","Zombie","Merfolk",
+  "Angel","Demon","Wizard","Knight","Warrior","Beast",
+  "Human","Spirit","Eldrazi","Sliver",
+];
+
+const SUPERTYPES = ["Legendary","Snow","Basic","Token","World"];
 
 export default function CardSearch() {
   const [params, setParams] = useSearchParams();
@@ -51,7 +69,9 @@ export default function CardSearch() {
   // Advanced filters
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [colorFilter, setColorFilter] = useState<string[]>([]);
-  const [typeFilter, setTypeFilter] = useState<string>("");
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  const [subtypeFilter, setSubtypeFilter] = useState("");
+  const [supertypeFilter, setSupertypeFilter] = useState("");
   const [formatFilter, setFormatFilter] = useState<string>("");
   const [rarityFilter, setRarityFilter] = useState<string>("");
   const [cmcMin, setCmcMin] = useState("");
@@ -63,13 +83,18 @@ export default function CardSearch() {
   const buildQuery = useCallback((baseQ: string) => {
     let q = baseQ.trim();
     if (colorFilter.length) q += ` c:${colorFilter.join("")}`;
-    if (typeFilter) q += ` t:${typeFilter.toLowerCase()}`;
+    if (typeFilter.length) typeFilter.forEach(t => { q += ` t:${t}`; });
+    if (subtypeFilter.trim()) q += ` t:${subtypeFilter.trim().toLowerCase()}`;
+    if (supertypeFilter) q += ` t:${supertypeFilter.toLowerCase()}`;
     if (formatFilter) q += ` f:${formatFilter}`;
     if (rarityFilter) q += ` r:${rarityFilter}`;
     if (cmcMin) q += ` cmc>=${cmcMin}`;
     if (cmcMax) q += ` cmc<=${cmcMax}`;
     return q;
-  }, [colorFilter, typeFilter, formatFilter, rarityFilter, cmcMin, cmcMax]);
+  }, [colorFilter, typeFilter, subtypeFilter, supertypeFilter, formatFilter, rarityFilter, cmcMin, cmcMax]);
+
+  const toggleType = (t: string) =>
+    setTypeFilter(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
 
   const runSearch = async (baseQ: string, pg = 1) => {
     if (!baseQ.trim()) return;
@@ -149,7 +174,13 @@ export default function CardSearch() {
     else toast.success(`Added ${card.name} to your collection`);
   };
 
-  const activeFilters = colorFilter.length + (typeFilter ? 1 : 0) + (formatFilter ? 1 : 0) + (rarityFilter ? 1 : 0) + (cmcMin ? 1 : 0) + (cmcMax ? 1 : 0);
+  const activeFilters = colorFilter.length + typeFilter.length + (subtypeFilter ? 1 : 0) + (supertypeFilter ? 1 : 0) + (formatFilter ? 1 : 0) + (rarityFilter ? 1 : 0) + (cmcMin ? 1 : 0) + (cmcMax ? 1 : 0);
+
+  const clearFilters = () => {
+    setColorFilter([]); setTypeFilter([]); setSubtypeFilter("");
+    setSupertypeFilter(""); setFormatFilter(""); setRarityFilter("");
+    setCmcMin(""); setCmcMax("");
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -193,23 +224,113 @@ export default function CardSearch() {
         </div>
 
         {/* Advanced filters toggle */}
-        <button
-          type="button"
-          onClick={() => setShowAdvanced((v) => !v)}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAdvanced && "rotate-180")} />
-          Advanced filters
-          {activeFilters > 0 && <span className="ml-0.5 rounded-full bg-primary/20 text-primary px-1.5 py-0.5 text-[10px] font-bold">{activeFilters}</span>}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAdvanced && "rotate-180")} />
+            Filters
+            {activeFilters > 0 && <span className="rounded-full bg-primary/20 text-primary px-1.5 py-0.5 text-[10px] font-bold">{activeFilters} active</span>}
+          </button>
+          {activeFilters > 0 && (
+            <button type="button" onClick={clearFilters} className="text-[10px] text-muted-foreground/60 hover:text-destructive transition-colors">
+              Clear all
+            </button>
+          )}
+        </div>
 
         {showAdvanced && (
-          <div className="rounded-xl border border-border/60 bg-card p-4 space-y-4 animate-fade-in">
-            <div className="flex flex-wrap gap-4">
-              {/* Colors */}
+          <div className="rounded-xl border border-border/60 bg-card p-4 space-y-5 animate-fade-in">
+
+            {/* ── Card Type ── */}
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Card Type</p>
+              <div className="flex flex-wrap gap-1.5">
+                {CARD_TYPES.map((t) => {
+                  const active = typeFilter.includes(t.query);
+                  return (
+                    <button
+                      key={t.query}
+                      type="button"
+                      onClick={() => toggleType(t.query)}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all",
+                        active
+                          ? "border-primary/60 bg-primary/15 text-primary ring-1 ring-primary/20"
+                          : "border-border/50 bg-secondary/30 text-muted-foreground hover:border-border hover:text-foreground"
+                      )}
+                    >
+                      <span className="text-base leading-none">{t.icon}</span>
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── Supertype ── */}
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Supertype</p>
+              <div className="flex flex-wrap gap-1.5">
+                {SUPERTYPES.map((s) => {
+                  const active = supertypeFilter === s.toLowerCase();
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSupertypeFilter(active ? "" : s.toLowerCase())}
+                      className={cn(
+                        "rounded-lg border px-2.5 py-1 text-xs font-medium transition-all",
+                        active
+                          ? "border-primary/60 bg-primary/15 text-primary ring-1 ring-primary/20"
+                          : "border-border/50 bg-secondary/30 text-muted-foreground hover:border-border hover:text-foreground"
+                      )}
+                    >
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── Subtype / Tribe ── */}
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Subtype / Tribe</p>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {SUBTYPES.map((s) => {
+                  const active = subtypeFilter.toLowerCase() === s.toLowerCase();
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSubtypeFilter(active ? "" : s)}
+                      className={cn(
+                        "rounded-lg border px-2.5 py-1 text-xs transition-all",
+                        active
+                          ? "border-accent/60 bg-accent/15 text-accent ring-1 ring-accent/20"
+                          : "border-border/50 bg-secondary/30 text-muted-foreground hover:border-border hover:text-foreground"
+                      )}
+                    >
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+              <Input
+                value={subtypeFilter}
+                onChange={(e) => setSubtypeFilter(e.target.value)}
+                placeholder="Or type any subtype (e.g. Pirate, Elemental, Saga…)"
+                className="h-8 text-xs bg-secondary/30 border-border/50"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              {/* Color */}
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Color</p>
-                <div className="flex gap-1.5">
+                <div className="flex gap-1">
                   {MANA_COLORS.map((c) => (
                     <button key={c.code} type="button" onClick={() => toggleColor(c.code)}
                       className={cn("h-7 w-7 rounded-full text-[11px] font-bold ring-2 transition-all", c.bg, c.text,
@@ -218,43 +339,85 @@ export default function CardSearch() {
                   ))}
                 </div>
               </div>
-              {/* Type */}
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Type</p>
-                <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
-                  className="h-7 rounded border border-border/60 bg-secondary/40 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
-                  <option value="">Any</option>
-                  {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
+
               {/* Format */}
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Format legal</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Format</p>
                 <select value={formatFilter} onChange={(e) => setFormatFilter(e.target.value)}
-                  className="h-7 rounded border border-border/60 bg-secondary/40 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
+                  className="h-8 w-full rounded border border-border/60 bg-secondary/40 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 capitalize">
                   <option value="">Any</option>
                   {FORMATS.map((f) => <option key={f} value={f} className="capitalize">{f}</option>)}
                 </select>
               </div>
+
               {/* Rarity */}
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Rarity</p>
-                <select value={rarityFilter} onChange={(e) => setRarityFilter(e.target.value)}
-                  className="h-7 rounded border border-border/60 bg-secondary/40 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
-                  <option value="">Any</option>
-                  {["common","uncommon","rare","mythic"].map((r) => <option key={r} value={r} className="capitalize">{r}</option>)}
-                </select>
+                <div className="flex flex-wrap gap-1">
+                  {["C","U","R","M"].map((r, i) => {
+                    const full = ["common","uncommon","rare","mythic"][i];
+                    const active = rarityFilter === full;
+                    const colors = ["text-rarity-common border-rarity-common/40","text-rarity-uncommon border-rarity-uncommon/50","text-rarity-rare border-rarity-rare/60","text-rarity-mythic border-rarity-mythic/60"][i];
+                    return (
+                      <button key={r} type="button"
+                        onClick={() => setRarityFilter(active ? "" : full)}
+                        className={cn("h-7 w-7 rounded border text-[10px] font-bold transition-all", colors,
+                          active ? "bg-secondary ring-1 ring-current" : "bg-secondary/30 opacity-50 hover:opacity-80"
+                        )}>
+                        {r}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+
               {/* CMC */}
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">CMC</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Mana Value</p>
                 <div className="flex items-center gap-1">
-                  <Input value={cmcMin} onChange={(e) => setCmcMin(e.target.value)} placeholder="Min" className="h-7 w-14 text-xs" type="number" min={0} />
+                  <Input value={cmcMin} onChange={(e) => setCmcMin(e.target.value)} placeholder="Min" className="h-8 w-14 text-xs" type="number" min={0} />
                   <span className="text-muted-foreground text-xs">–</span>
-                  <Input value={cmcMax} onChange={(e) => setCmcMax(e.target.value)} placeholder="Max" className="h-7 w-14 text-xs" type="number" min={0} />
+                  <Input value={cmcMax} onChange={(e) => setCmcMax(e.target.value)} placeholder="Max" className="h-8 w-14 text-xs" type="number" min={0} />
                 </div>
               </div>
             </div>
+
+            {/* Active filter chips */}
+            {activeFilters > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1 border-t border-border/40">
+                {typeFilter.map(t => (
+                  <span key={t} onClick={() => toggleType(t)} className="flex items-center gap-1 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[11px] cursor-pointer hover:bg-primary/25">
+                    {CARD_TYPES.find(x => x.query === t)?.icon} {t} ×
+                  </span>
+                ))}
+                {supertypeFilter && (
+                  <span onClick={() => setSupertypeFilter("")} className="flex items-center gap-1 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[11px] cursor-pointer hover:bg-primary/25">
+                    {supertypeFilter} ×
+                  </span>
+                )}
+                {subtypeFilter && (
+                  <span onClick={() => setSubtypeFilter("")} className="flex items-center gap-1 rounded-full bg-accent/15 text-accent px-2 py-0.5 text-[11px] cursor-pointer hover:bg-accent/25">
+                    {subtypeFilter} ×
+                  </span>
+                )}
+                {colorFilter.map(c => (
+                  <span key={c} onClick={() => toggleColor(c)} className="flex items-center gap-1 rounded-full bg-secondary text-foreground px-2 py-0.5 text-[11px] cursor-pointer hover:bg-secondary/60">
+                    {c} ×
+                  </span>
+                ))}
+                {formatFilter && (
+                  <span onClick={() => setFormatFilter("")} className="flex items-center gap-1 rounded-full bg-secondary text-foreground px-2 py-0.5 text-[11px] cursor-pointer hover:bg-secondary/60">
+                    {formatFilter} ×
+                  </span>
+                )}
+                {rarityFilter && (
+                  <span onClick={() => setRarityFilter("")} className="flex items-center gap-1 rounded-full bg-secondary text-foreground px-2 py-0.5 text-[11px] cursor-pointer hover:bg-secondary/60">
+                    {rarityFilter} ×
+                  </span>
+                )}
+              </div>
+            )}
+
           </div>
         )}
       </form>
