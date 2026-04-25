@@ -354,24 +354,24 @@ export default function Collection() {
             {totalCards.toLocaleString()} cards · ${totalValue.toFixed(2)} est. value · {cards.length} unique
           </p>
         </div>
-        {/* Toolbar — wraps cleanly on mobile */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" className="border-border/60 h-8" onClick={() => setShowStats(v => !v)}>
-            {showStats ? "Hide stats" : "Show stats"}
+        {/* Toolbar — single tight row on mobile */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Button variant="outline" size="sm" className="border-border/60 h-8 px-3 text-xs" onClick={() => setShowStats(v => !v)}>
+            {showStats ? "Hide stats" : "Stats"}
           </Button>
           <Button
             variant={selectMode ? "secondary" : "outline"} size="sm"
-            className={cn("border-border/60 gap-1.5 h-8", selectMode && "border-primary/50 text-primary")}
+            className={cn("border-border/60 gap-1 h-8 px-3 text-xs", selectMode && "border-primary/50 text-primary")}
             onClick={toggleSelectMode}
           >
             <CheckSquare className="h-3.5 w-3.5" />
             {selectMode ? "Cancel" : "Select"}
           </Button>
-          <Button variant="outline" size="sm" className="border-border/60 h-8" onClick={() => setImportOpen(true)}>
-            <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
+          <Button variant="outline" size="sm" className="border-border/60 h-8 px-3 text-xs" onClick={() => setImportOpen(true)}>
+            <Upload className="mr-1 h-3.5 w-3.5" /> Import
           </Button>
-          <Button asChild size="sm" className="h-8 bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90">
-            <Link to="/app/search"><Plus className="mr-1.5 h-3.5 w-3.5" /> Add cards</Link>
+          <Button asChild size="sm" className="h-8 px-3 text-xs bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90 ml-auto">
+            <Link to="/app/search"><Plus className="mr-1 h-3.5 w-3.5" /> Add cards</Link>
           </Button>
         </div>
       </div>
@@ -398,22 +398,21 @@ export default function Collection() {
                   : "border-border/50 bg-secondary/20 hover:border-border hover:bg-secondary/40"
               )}
             >
-              <div className="flex items-center gap-2">
-                <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors",
+              <div className="flex items-center gap-1.5">
+                <div className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors",
                   isActive ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground"
                 )}>
-                  <Icon className="h-3.5 w-3.5" />
+                  <Icon className="h-3 w-3" />
                 </div>
-                <span className={cn("font-fantasy text-sm font-semibold", isActive ? "text-foreground" : "text-muted-foreground")}>
+                <span className={cn("font-fantasy text-xs font-semibold truncate", isActive ? "text-foreground" : "text-muted-foreground")}>
                   {tab.label}
                 </span>
-                <span className={cn("ml-auto text-xs font-bold tabular-nums", isActive ? "text-primary" : "text-muted-foreground/60")}>
+                <span className={cn("ml-auto text-xs font-bold tabular-nums shrink-0", isActive ? "text-primary" : "text-muted-foreground/60")}>
                   {count}
                 </span>
               </div>
-              <p className="pl-9 text-[10px] text-muted-foreground/60 leading-tight hidden sm:block">{tab.desc}</p>
               {count > 0 && (
-                <p className={cn("pl-9 text-xs font-medium", isActive ? "text-mana-green" : "text-muted-foreground/50")}>
+                <p className={cn("text-[10px] font-medium mt-0.5", isActive ? "text-mana-green" : "text-muted-foreground/40")}>
                   ${val.toFixed(2)}
                 </p>
               )}
@@ -723,7 +722,7 @@ export default function Collection() {
       ) : filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground py-8 text-center">No cards match your current filters.</p>
       ) : view === "grid" ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {filtered.map(c => {
             const isSelected = selected.has(c.id);
             const badge = STORAGE_BADGE[c.storage_type];
@@ -740,10 +739,10 @@ export default function Collection() {
                   </button>
                 )}
 
-                {/* Storage type pill — top right */}
-                <div className="absolute top-2 right-2 z-10">
-                  <span className={cn("rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide backdrop-blur-sm bg-background/70", badge.cls)}>
-                    {c.storage_type === "arcane" ? "✦" : "▣"} {badge.label}
+                {/* Storage type pill — top right, minimal */}
+                <div className="absolute top-1.5 right-1.5 z-10">
+                  <span className={cn("rounded px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide backdrop-blur-sm bg-black/60 border", badge.cls)}>
+                    {c.storage_type === "arcane" ? "✦" : "■"} {badge.label}
                   </span>
                 </div>
 
@@ -756,44 +755,40 @@ export default function Collection() {
                     : <div className="flex h-full items-center justify-center p-2 text-center text-xs text-muted-foreground">{c.card_name}</div>}
                 </button>
 
-                <CardContent className="space-y-2 p-3">
-                  <p className="line-clamp-1 font-fantasy text-sm font-semibold">{c.card_name}</p>
-                  <div className="flex items-center justify-between">
+                <CardContent className="space-y-1.5 p-2">
+                  <div className="flex items-center justify-between gap-1">
+                    <p className="line-clamp-1 font-fantasy text-xs font-semibold flex-1 min-w-0">{c.card_name}</p>
+                    {c.price_usd && <span className="text-[10px] text-mana-green shrink-0">${Number(c.price_usd).toFixed(2)}</span>}
+                  </div>
+                  <div className="flex items-center gap-1">
                     {c.rarity && (
-                      <Badge variant="outline" className={`text-[10px] uppercase ${RARITY_CLASS[c.rarity] ?? RARITY_CLASS.common}`}>
+                      <Badge variant="outline" className={`text-[9px] uppercase px-1 py-0 ${RARITY_CLASS[c.rarity] ?? RARITY_CLASS.common}`}>
                         {c.rarity}
                       </Badge>
                     )}
-                    <div className="flex items-center gap-1">
-                      {c.foil && <span className="text-[9px] text-primary font-bold uppercase">✦ foil</span>}
-                      {c.price_usd && <span className="text-xs text-mana-green">${Number(c.price_usd).toFixed(2)}</span>}
-                    </div>
+                    {c.foil && <span className="text-[8px] text-primary font-bold">✦</span>}
                   </div>
                   {!selectMode && (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1 rounded-md border border-border bg-secondary/50">
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQty(c.id, -1)}><Minus className="h-3 w-3" /></Button>
-                          <span className="min-w-[1.5rem] text-center text-sm font-semibold">{c.quantity}</span>
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQty(c.id, 1)}><Plus className="h-3 w-3" /></Button>
-                        </div>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => remove(c.id)}>
-                          <Trash2 className="h-3.5 w-3.5" />
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-0.5 rounded border border-border bg-secondary/50">
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQty(c.id, -1)}><Minus className="h-2.5 w-2.5" /></Button>
+                        <span className="min-w-[1.25rem] text-center text-xs font-semibold">{c.quantity}</span>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQty(c.id, 1)}><Plus className="h-2.5 w-2.5" /></Button>
+                      </div>
+                      <div className="flex items-center gap-0.5">
+                        <button
+                          onClick={() => switchStorage(c.id, c.storage_type === "arcane" ? "vault" : "arcane")}
+                          disabled={movingId === c.id}
+                          title={c.storage_type === "arcane" ? "Move to Vault" : "Move to Arcane"}
+                          className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-all disabled:opacity-50"
+                        >
+                          {movingId === c.id ? <Loader2 className="h-3 w-3 animate-spin" /> : c.storage_type === "arcane" ? <Package className="h-3 w-3" /> : <Sparkles className="h-3 w-3" />}
+                        </button>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => remove(c.id)}>
+                          <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
-                      {/* Move to Arcane/Vault */}
-                      <button
-                        onClick={() => switchStorage(c.id, c.storage_type === "arcane" ? "vault" : "arcane")}
-                        disabled={movingId === c.id}
-                        className="w-full flex items-center justify-center gap-1 rounded border border-border/40 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:border-border transition-all disabled:opacity-50"
-                      >
-                        {movingId === c.id
-                          ? <Loader2 className="h-3 w-3 animate-spin" />
-                          : c.storage_type === "arcane"
-                            ? <><Package className="h-3 w-3" /> Move to Vault</>
-                            : <><Sparkles className="h-3 w-3" /> Move to Arcane</>}
-                      </button>
-                    </>
+                    </div>
                   )}
                 </CardContent>
               </Card>
