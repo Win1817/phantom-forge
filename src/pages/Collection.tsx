@@ -1,8 +1,9 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import {
   Trash2, Minus, Plus, Library, LayoutGrid, List,
   SlidersHorizontal, X, ArrowUpDown, CheckSquare, Square,
-  Upload, HelpCircle, Loader2, Sparkles, Package, Wand2
+  Upload, HelpCircle, Loader2, Sparkles, Package, Wand2,
+  Download, Check, Copy
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -141,6 +142,12 @@ export default function Collection() {
   // Moving storage type
   const [movingId, setMovingId] = useState<string | null>(null);
 
+  // Export
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<"simple" | "arena" | "csv">("simple");
+  const [exportCopied, setExportCopied] = useState(false);
+  const exportTextareaRef = useRef<HTMLTextAreaElement>(null);
+
   useEffect(() => { if (user) load(); }, [user]);
 
   const load = async () => {
@@ -239,6 +246,76 @@ export default function Collection() {
   };
 
   // ── Card operations ────────────────────────────────────────────────────────
+  // ── Export ────────────────────────────────────────────────────────────────
+  const cardsToExport = useMemo(() => {
+    // Export the currently visible filtered set, or all if no filters
+    return storageTab === "all" ? cards : cards.filter(c => c.storage_type === storageTab);
+  }, [cards, storageTab]);
+
+  const exportText = useMemo(() => {
+    if (exportFormat === "simple") {
+      return cardsToExport
+        .map(c => `${c.quantity} ${c.card_name}`)
+        .join("\n");
+    }
+    if (exportFormat === "arena") {
+      return cardsToExport
+        .map(c => `${c.quantity} ${c.card_name}`)
+        .join("\n");
+    }
+    if (exportFormat === "csv") {
+      const header = "Name,Quantity,Set,Rarity,Type,CMC,Price USD,Foil,Storage";
+      const rows = cardsToExport.map(c =>
+        [
+          `"${c.card_name}"`,
+          c.quantity,
+          `"${c.set_name ?? ""}"`,
+          c.rarity ?? "",
+          `"${c.type_line ?? ""}"`,
+          c.cmc ?? "",
+          c.price_usd ?? "",
+          c.foil ? "Yes" : "No",
+          c.storage_type,
+        ].join(",")
+      );
+      return [header, ...rows].join("\n");
+    }
+    return "";
+  }, [cardsToExport, exportFormat]);
+
+  const copyExport = () => {
+    const el = exportTextareaRef.current;
+    if (!el) return;
+    el.removeAttribute("readonly");
+    el.focus();
+    el.select();
+    el.setSelectionRange(0, el.value.length);
+    const ok = document.execCommand("copy");
+    el.setAttribute("readonly", "true");
+    if (ok) {
+      setExportCopied(true);
+      setTimeout(() => setExportCopied(false), 2500);
+    } else {
+      navigator.clipboard?.writeText(exportText).then(() => {
+        setExportCopied(true);
+        setTimeout(() => setExportCopied(false), 2500);
+      });
+    }
+  };
+
+  const downloadExport = () => {
+    const ext = exportFormat === "csv" ? "csv" : "txt";
+    const mimeType = exportFormat === "csv" ? "text/csv" : "text/plain";
+    const label = storageTab === "all" ? "collection" : storageTab;
+    const blob = new Blob([exportText], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `phantom-mtg-${label}-${new Date().toISOString().slice(0, 10)}.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const updateQty = async (id: string, delta: number) => {
     const card = cards.find(c => c.id === id);
     if (!card) return;
@@ -369,6 +446,9 @@ export default function Collection() {
           </Button>
           <Button variant="outline" size="sm" className="border-border/60 h-8 px-3 text-xs" onClick={() => setImportOpen(true)}>
             <Upload className="mr-1 h-3.5 w-3.5" /> Import
+          </Button>
+          <Button variant="outline" size="sm" className="border-border/60 h-8 px-3 text-xs" onClick={() => setExportOpen(true)}>
+            <Download className="mr-1 h-3.5 w-3.5" /> Export
           </Button>
           <Button asChild size="sm" className="h-8 px-3 text-xs bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90 ml-auto">
             <Link to="/app/search"><Plus className="mr-1 h-3.5 w-3.5" /> Add cards</Link>
@@ -960,6 +1040,76 @@ export default function Collection() {
                 {importing
                   ? <><Loader2 className="h-4 w-4 animate-spin" /> Importing…</>
                   : <><Upload className="h-4 w-4" /> Import to {importStorage === "arcane" ? "Arcane" : "Vault"}</>}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Export Dialog ── */}
+      <Dialog open={exportOpen} onOpenChange={o => { setExportOpen(o); if (!o) setExportCopied(false); }}>
+        <DialogContent className="max-w-lg border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="font-fantasy text-xl text-gradient-gold flex items-center gap-2">
+              <Download className="h-5 w-5 text-primary" /> Export Collection
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              {storageTab === "all" ? "All" : storageTab === "vault" ? "🗃️ Vault" : "✨ Arcane"} · {cardsToExport.length} cards
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-1">
+            {/* Format picker */}
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Format</p>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { key: "simple", label: "Simple List", desc: "4 Lightning Bolt", icon: "📋" },
+                  { key: "arena",  label: "Arena / MTGO", desc: "4 Card Name (SET) #", icon: "🎮" },
+                  { key: "csv",    label: "Spreadsheet", desc: "CSV with all fields", icon: "📊" },
+                ] as const).map(f => (
+                  <button key={f.key} onClick={() => setExportFormat(f.key)}
+                    className={cn(
+                      "flex flex-col gap-1 rounded-lg border p-2.5 text-left transition-all",
+                      exportFormat === f.key
+                        ? "border-primary/50 bg-primary/8 ring-1 ring-primary/20"
+                        : "border-border/50 bg-secondary/20 hover:border-border"
+                    )}>
+                    <span className="text-lg leading-none">{f.icon}</span>
+                    <span className="text-xs font-semibold leading-tight">{f.label}</span>
+                    <span className="text-[10px] text-muted-foreground leading-tight font-mono">{f.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Preview */}
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Preview</p>
+              <textarea
+                ref={exportTextareaRef}
+                readOnly
+                value={exportText}
+                className="w-full min-h-[160px] max-h-[260px] rounded-lg border border-border/60 bg-secondary/40 p-3 font-mono text-xs text-foreground resize-none focus:outline-none"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button
+                onClick={copyExport}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border/60 py-2.5 text-sm font-medium transition-all hover:bg-secondary/50"
+              >
+                {exportCopied
+                  ? <><Check className="h-4 w-4 text-mana-green" /> Copied!</>
+                  : <><Copy className="h-4 w-4" /> Copy</>}
+              </button>
+              <button
+                onClick={downloadExport}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-primary to-primary-glow py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90"
+              >
+                <Download className="h-4 w-4" />
+                Download .{exportFormat === "csv" ? "csv" : "txt"}
               </button>
             </div>
           </div>
