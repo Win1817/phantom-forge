@@ -19,6 +19,7 @@ import Wishlist from "./pages/Wishlist.tsx";
 import Settings from "./pages/Settings.tsx";
 import SharedDeck from "./pages/SharedDeck.tsx";
 import ForgeGuide from "./pages/ForgeGuide.tsx";
+import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { CurrencyProvider } from "./contexts/CurrencyContext.tsx";
 
 const queryClient = new QueryClient();
@@ -37,7 +38,7 @@ const App = () => (
             path="/app"
             element={
               <ProtectedRoute>
-                <AppLayout />
+                <ErrorBoundary><AppLayout /></ErrorBoundary>
               </ProtectedRoute>
             }
           >

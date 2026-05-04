@@ -97,7 +97,7 @@ export default function DeckDetail() {
   const { fmtScryfall } = useCurrency();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [deck, setDeck] = useState<Deck | null>(null);
   const [cards, setCards] = useState<DeckCard[]>([]);
@@ -126,7 +126,10 @@ export default function DeckDetail() {
   const [addingCard, setAddingCard] = useState<string | null>(null);
   const addTimer = useRef<ReturnType<typeof setTimeout>>();
 
-  useEffect(() => { if (user && id) load(); }, [user, id]);
+  useEffect(() => {
+    if (!authLoading && user && id) load();
+    else if (!authLoading && !user) navigate("/auth");
+  }, [user, authLoading, id]);
 
   const load = async () => {
     setLoading(true);
