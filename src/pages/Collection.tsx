@@ -1,3 +1,4 @@
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { useEffect, useState, useMemo, useRef } from "react";
 import {
   Trash2, Minus, Plus, Library, LayoutGrid, List,
@@ -103,6 +104,7 @@ type ViewMode = "grid" | "list";
 export default function Collection() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { fmt } = useCurrency();
   const [cards, setCards]     = useState<CollectionCard[]>([]);
   const [filter, setFilter]   = useState("");
   const [loading, setLoading] = useState(true);
@@ -428,7 +430,7 @@ export default function Collection() {
         <div>
           <h1 className="font-fantasy text-3xl font-bold text-gradient-gold md:text-4xl">Your Grimoire</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {totalCards.toLocaleString()} cards · ${totalValue.toFixed(2)} est. value · {cards.length} unique
+            {totalCards.toLocaleString()} cards · {fmt(totalValue)} est. value · {cards.length} unique
           </p>
         </div>
         {/* Toolbar — single tight row on mobile */}
@@ -493,7 +495,7 @@ export default function Collection() {
               </div>
               {count > 0 && (
                 <p className={cn("text-[10px] font-medium mt-0.5", isActive ? "text-mana-green" : "text-muted-foreground/40")}>
-                  ${val.toFixed(2)}
+                  {fmt(val)}
                 </p>
               )}
             </button>
@@ -553,7 +555,7 @@ export default function Collection() {
           <div className="h-4 w-px bg-border/60" />
           <span className="text-sm font-medium">
             {selected.size > 0
-              ? <>{selected.size} selected · <span className="text-mana-green">${selectedValue.toFixed(2)}</span></>
+              ? <>{selected.size} selected · <span className="text-mana-green">{fmt(selectedValue)}</span></>
               : <span className="text-muted-foreground">Tap cards to select</span>}
           </span>
           <div className="ml-auto flex items-center gap-2">
@@ -838,7 +840,7 @@ export default function Collection() {
                 <CardContent className="space-y-1.5 p-2">
                   <div className="flex items-center justify-between gap-1">
                     <p className="line-clamp-1 font-fantasy text-xs font-semibold flex-1 min-w-0">{c.card_name}</p>
-                    {c.price_usd && <span className="text-[10px] text-mana-green shrink-0">${Number(c.price_usd).toFixed(2)}</span>}
+                    {c.price_usd && <span className="text-[10px] text-mana-green shrink-0">{fmt(c.price_usd)}</span>}
                   </div>
                   <div className="flex items-center gap-1">
                     {c.rarity && (
@@ -904,7 +906,7 @@ export default function Collection() {
                   </span>
                   {c.rarity && <Badge variant="outline" className={`text-[9px] uppercase hidden md:inline-flex ${RARITY_CLASS[c.rarity] ?? ""}`}>{c.rarity}</Badge>}
                   {c.foil && <span className="text-[9px] text-primary font-bold hidden lg:block">✦</span>}
-                  {c.price_usd && <span className="text-mana-green hidden sm:block">${Number(c.price_usd).toFixed(2)}</span>}
+                  {c.price_usd && <span className="text-mana-green hidden sm:block">{fmt(c.price_usd)}</span>}
                   {!selectMode && (
                     <>
                       <div className="flex items-center gap-1 rounded border border-border bg-secondary/50">

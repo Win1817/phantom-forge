@@ -1,3 +1,4 @@
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -93,6 +94,7 @@ function groupByType(cards: DeckCard[]) {
 const TYPE_ORDER = ["Commanders","Creatures","Instants","Sorceries","Enchantments","Artifacts","Planeswalkers","Lands","Other"];
 
 export default function DeckDetail() {
+  const { fmtScryfall } = useCurrency();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -527,7 +529,7 @@ Return ONLY valid JSON (no markdown, no code fences):
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {ownedIds.has(card.id) && <CheckCircle2 className="h-3.5 w-3.5 text-mana-green" title="In collection" />}
-                  {card.prices?.usd && <span className="text-xs text-mana-green">${card.prices.usd}</span>}
+                  {fmtScryfall(card.prices) && <span className="text-xs text-mana-green">{fmtScryfall(card.prices)}</span>}
                   <Button size="sm" className="h-7 text-xs bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90" disabled={addingCard === card.id} onClick={() => addCardToDeck(card)}>
                     {addingCard === card.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Plus className="h-3 w-3 mr-1" /> Add</>}
                   </Button>

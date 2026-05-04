@@ -1,3 +1,4 @@
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { useEffect, useState } from "react";
 import { Heart, Plus, Trash2, Search, Loader2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ const RARITY_CLASS: Record<string, string> = {
 };
 
 export default function Wishlist() {
+  const { fmt } = useCurrency();
   const { user } = useAuth();
   const [items, setItems] = useState<WishlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,7 +121,7 @@ export default function Wishlist() {
       <div className="flex flex-col gap-1">
         <h1 className="font-fantasy text-3xl font-bold text-gradient-gold md:text-4xl">Wishlist & Trades</h1>
         <p className="text-sm text-muted-foreground">
-          {items.length} cards · ${totalWant.toFixed(2)} total · ${missingCost.toFixed(2)} still needed
+          {items.length} cards · {fmt(totalWant)} total · {fmt(missingCost)} still needed
         </p>
       </div>
 
@@ -135,13 +137,13 @@ export default function Wishlist() {
           <Card className="border-border bg-card">
             <CardContent className="p-4">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">Total cost</p>
-              <p className="font-fantasy text-2xl font-semibold mt-1 text-mana-green">${totalWant.toFixed(2)}</p>
+              <p className="font-fantasy text-2xl font-semibold mt-1 text-mana-green">{fmt(totalWant)}</p>
             </CardContent>
           </Card>
           <Card className="border-primary/20 bg-arcane">
             <CardContent className="p-4">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">Still missing</p>
-              <p className="font-fantasy text-2xl font-semibold mt-1 text-primary">${missingCost.toFixed(2)}</p>
+              <p className="font-fantasy text-2xl font-semibold mt-1 text-primary">{fmt(missingCost)}</p>
             </CardContent>
           </Card>
         </div>
@@ -180,7 +182,7 @@ export default function Wishlist() {
                     <p className="text-xs text-muted-foreground">{card.set_name}</p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {card.prices?.usd && <span className="text-xs text-mana-green">${card.prices.usd}</span>}
+                    {card.prices?.usd && <span className="text-xs text-mana-green">{fmt(Number(card.prices.usd))}</span>}
                     <Button size="sm" className="h-7 text-xs bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90" disabled={adding === card.id || items.some((i) => i.scryfall_id === card.id)} onClick={() => addToWishlist(card)}>
                       {adding === card.id ? <Loader2 className="h-3 w-3 animate-spin" /> : items.some((i) => i.scryfall_id === card.id) ? "Added" : <><Heart className="h-3 w-3 mr-1" /> Want</>}
                     </Button>
@@ -222,7 +224,7 @@ export default function Wishlist() {
                   <p className="line-clamp-1 font-fantasy text-sm font-semibold">{item.card_name}</p>
                   <div className="flex items-center justify-between">
                     {item.rarity && <Badge variant="outline" className={`text-[10px] uppercase ${RARITY_CLASS[item.rarity] ?? ""}`}>{item.rarity}</Badge>}
-                    {item.price_usd && <span className="text-xs text-mana-green">${Number(item.price_usd).toFixed(2)}</span>}
+                    {item.price_usd && <span className="text-xs text-mana-green">{fmt(item.price_usd)}</span>}
                   </div>
                   {owned ? (
                     <p className="text-xs text-mana-green font-semibold">✓ In collection</p>

@@ -19,12 +19,14 @@ import Wishlist from "./pages/Wishlist.tsx";
 import Settings from "./pages/Settings.tsx";
 import SharedDeck from "./pages/SharedDeck.tsx";
 import ForgeGuide from "./pages/ForgeGuide.tsx";
+import { CurrencyProvider } from "./contexts/CurrencyContext.tsx";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
+    <CurrencyProvider>
+      <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
@@ -56,6 +58,7 @@ const App = () => (
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
+      </CurrencyProvider>
   </QueryClientProvider>
 );
 

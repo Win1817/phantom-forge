@@ -1,3 +1,4 @@
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -76,6 +77,7 @@ export default function Dashboard() {
     })();
   }, [user]);
 
+  const { fmt } = useCurrency();
   const greetingName = user?.user_metadata?.display_name || user?.email?.split("@")[0] || "Planeswalker";
   const valueTrend = valueHistory.length >= 2
     ? valueHistory[valueHistory.length - 1].value - valueHistory[0].value
@@ -92,7 +94,7 @@ export default function Dashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={Library}    label="Total cards"  value={stats.totalCards.toLocaleString()} accent="text-mana-blue" />
         <StatCard icon={Sparkles}   label="Unique cards" value={stats.uniqueCards.toLocaleString()} accent="text-primary" />
-        <StatCard icon={DollarSign} label="Est. value"   value={`$${stats.estValue.toFixed(2)}`} accent="text-mana-green" />
+        <StatCard icon={DollarSign} label="Est. value"   value={fmt(stats.estValue)} accent="text-mana-green" />
         <StatCard icon={LayersIcon} label="Decks built"  value={stats.deckCount.toString()} accent="text-mana-red" />
       </div>
 
@@ -155,7 +157,7 @@ export default function Dashboard() {
               </CardTitle>
               {valueHistory.length >= 2 && (
                 <span className={`text-xs font-semibold ${valueTrend >= 0 ? "text-mana-green" : "text-destructive"}`}>
-                  {valueTrend >= 0 ? "+" : ""}${valueTrend.toFixed(2)}
+                  {valueTrend >= 0 ? "+" : ""}{fmt(Math.abs(valueTrend))}
                 </span>
               )}
             </CardHeader>
@@ -166,7 +168,7 @@ export default function Dashboard() {
                     <XAxis dataKey="date" tick={{ fontSize:9, fill:"hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                     <Tooltip
                       contentStyle={{ background:"hsl(var(--card))", border:"1px solid hsl(var(--border))", borderRadius:6, fontSize:11 }}
-                      formatter={(v: number) => [`$${v.toFixed(2)}`, "Value"]}
+                      formatter={(v: number) => [fmt(v), "Value"]}
                     />
                     <Line type="monotone" dataKey="value" stroke="hsl(var(--mana-green))" strokeWidth={2} dot={false} />
                   </LineChart>

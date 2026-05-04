@@ -1,3 +1,4 @@
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { useEffect, useState, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Plus, Library, Sparkles, X, Loader2, ExternalLink, Zap, Layers } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -266,7 +267,7 @@ const VersionsTab = ({ card }: { card: ScryfallCard }) => {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {printings.map(p => {
           const img = p.image_uris?.small ?? p.card_faces?.[0]?.image_uris?.small;
-          const price = p.prices?.usd ? `$${p.prices.usd}` : p.prices?.usd_foil ? `✦ $${p.prices.usd_foil}` : null;
+          const price = fmtScryfall(p.prices) || (fmtScryfall(p.prices, true) ? `✦ ${fmtScryfall(p.prices, true)}` : null);
           return (
             <a key={p.id} href={p.scryfall_uri} target="_blank" rel="noreferrer"
               className="group flex flex-col gap-1.5 rounded-xl border border-border/50 bg-secondary/20 p-2.5 hover:border-primary/40 hover:bg-secondary/40 transition-all">
@@ -362,8 +363,8 @@ const CardDetailBody = ({
 
   const priceEl = (card.prices?.usd || card.prices?.usd_foil) && (
     <div className="flex flex-wrap gap-1.5">
-      {card.prices?.usd && <Badge variant="outline" className="text-[11px] text-mana-green border-mana-green/40">${card.prices.usd}</Badge>}
-      {card.prices?.usd_foil && <Badge variant="outline" className="text-[11px] text-primary border-primary/40">Foil ${card.prices.usd_foil}</Badge>}
+      {fmtScryfall(card.prices) && <Badge variant="outline" className="text-[11px] text-mana-green border-mana-green/40">{fmtScryfall(card.prices)}</Badge>}
+      {fmtScryfall(card.prices, true) && <Badge variant="outline" className="text-[11px] text-primary border-primary/40">Foil {fmtScryfall(card.prices, true)}</Badge>}
     </div>
   );
 

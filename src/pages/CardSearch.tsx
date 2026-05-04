@@ -1,3 +1,4 @@
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -80,6 +81,7 @@ function buildExportText(cards: ScryfallCard[], format: ExportFormat): string {
 }
 
 export default function CardSearch() {
+  const { fmtScryfall } = useCurrency();
   const [params, setParams] = useSearchParams();
   const initial = params.get("q") ?? "";
   const [query, setQuery]       = useState(initial);
@@ -476,7 +478,7 @@ export default function CardSearch() {
                 <p className="line-clamp-1 font-fantasy text-sm font-semibold">{c.name}</p>
                 <div className="flex items-center justify-between gap-1">
                   <Badge variant="outline" className={`text-[10px] uppercase ${RARITY_CLASS[rarity] ?? RARITY_CLASS.common}`}>{rarity}</Badge>
-                  {c.prices?.usd && <span className="text-xs text-mana-green">${c.prices.usd}</span>}
+                  {fmtScryfall(c.prices) && <span className="text-xs text-mana-green">{fmtScryfall(c.prices)}</span>}
                 </div>
                 <Button size="sm" variant="secondary" className="w-full h-8" disabled={adding === c.id} onClick={() => addToCollection(c)}>
                   {adding === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Plus className="h-3.5 w-3.5 mr-1" /> Add</>}

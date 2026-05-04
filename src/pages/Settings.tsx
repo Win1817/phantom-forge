@@ -1,3 +1,5 @@
+import { useCurrency } from "@/contexts/CurrencyContext";
+import { CURRENCIES, type Currency } from "@/lib/currency";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -247,10 +249,59 @@ const Settings = () => {
           <h2 className="font-fantasy text-lg">Preferences</h2>
         </div>
         <Separator className="bg-border/60" />
-        <p className="text-sm text-muted-foreground">Currency, language, and display preferences — coming soon.</p>
+        <CurrencySettingSection />
       </div>
     </div>
   );
 };
 
 export default Settings;
+
+// ── Currency Setting Section ──────────────────────────────────────────────────
+
+function CurrencySettingSection() {
+  const { currency, setCurrency } = useCurrency();
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold">Display currency</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Card prices will be shown in your selected currency across the entire app.
+          Exchange rates are approximate.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {(Object.values(CURRENCIES) as typeof CURRENCIES[Currency][]).map((cfg) => (
+          <button
+            key={cfg.code}
+            type="button"
+            onClick={() => setCurrency(cfg.code)}
+            className={[
+              "flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-all",
+              currency === cfg.code
+                ? "border-primary/60 bg-primary/10 text-primary ring-1 ring-primary/20"
+                : "border-border/60 bg-secondary/40 text-muted-foreground hover:border-primary/30 hover:text-foreground",
+            ].join(" ")}
+          >
+            <span className="text-xl font-bold w-6 text-center">{cfg.symbol}</span>
+            <span>
+              <span className="font-semibold">{cfg.code}</span>
+              <span className="ml-1.5 text-xs opacity-70">{cfg.label}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+      {currency === "PHP" && (
+        <p className="text-[11px] text-muted-foreground/60 italic">
+          PHP rate: ₱56.50 / $1 USD (approximate — Scryfall does not provide live PHP rates)
+        </p>
+      )}
+      {currency === "EUR" && (
+        <p className="text-[11px] text-muted-foreground/60 italic">
+          EUR prices sourced directly from Scryfall European market data.
+        </p>
+      )}
+    </div>
+  );
+}

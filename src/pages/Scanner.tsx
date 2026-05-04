@@ -1,3 +1,4 @@
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { useRef, useState, useCallback } from "react";
 import { ScanLine, Camera, Loader2, Plus, RotateCcw, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ interface IdentifiedCard {
 }
 
 export default function Scanner() {
+  const { fmt } = useCurrency();
   const { user } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -243,7 +245,7 @@ export default function Scanner() {
                 <p className="text-xs text-muted-foreground line-clamp-1">{identified.type_line}</p>
                 <div className="flex items-center gap-2 flex-wrap">
                   {identified.rarity && <span className="text-[10px] uppercase text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded">{identified.rarity}</span>}
-                  {identified.price_usd && <span className="text-sm text-mana-green font-semibold">${identified.price_usd}</span>}
+                  {identified.price_usd && <span className="text-sm text-mana-green font-semibold">{fmt(Number(identified.price_usd))}</span>}
                   {identified.set_name && <span className="text-xs text-muted-foreground">{identified.set_name}</span>}
                 </div>
                 {state === "added" ? (
