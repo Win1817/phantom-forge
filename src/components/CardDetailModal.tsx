@@ -48,6 +48,7 @@ interface MathAnalysis {
 
 const CardDetailModal = ({ cardId, siblingIds = [], onChangeCardId, onClose }: Props) => {
   const isMobile = useIsMobile();
+  const { fmtScryfall } = useCurrency();
   const [card, setCard]         = useState<ScryfallCard | null>(null);
   const [loading, setLoading]   = useState(false);
   const [math, setMath]         = useState<MathAnalysis | null>(null);
