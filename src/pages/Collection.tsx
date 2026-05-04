@@ -384,7 +384,7 @@ export default function Collection() {
         default:         return 0;
       }
     });
-  }, [cards, storageTab, filter, colorFilter, rarityFilter, foilFilter, cmcMin, cmcMax, sortKey]);
+  }, [cards, storageTab, filter, colorFilter, rarityFilter, typeFilter, supertypeFilter, subtypeFilter, foilFilter, cmcMin, cmcMax, sortKey]);
 
   // ── Stats ──────────────────────────────────────────────────────────────────
   const arcaneCards = cards.filter(c => c.storage_type === "arcane");

@@ -166,6 +166,7 @@ const CardDetailModal = ({ cardId, siblingIds = [], onChangeCardId, onClose }: P
       image_url: img,
       price_usd: card.prices?.usd ? Number(card.prices.usd) : null,
       quantity: 1,
+      storage_type: "vault",
     });
     setAdding(false);
     if (error) toast.error(error.message);
@@ -228,7 +229,7 @@ interface Printing {
 
 const printingsCache = new Map<string, Printing[]>();
 
-const VersionsTab = ({ card }: { card: ScryfallCard }) => {
+const VersionsTab = ({ card, fmtScryfall }: { card: ScryfallCard; fmtScryfall: (prices: Printing["prices"], foil?: boolean) => string }) => {
   const [printings, setPrintings] = useState<Printing[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -432,7 +433,7 @@ const CardDetailBody = ({
       </div>
 
       {/* ── Versions tab ── */}
-      {activeTab === "versions" && <VersionsTab card={card} />}
+      {activeTab === "versions" && <VersionsTab card={card} fmtScryfall={fmtScryfall} />}
 
       {/* ── MOBILE layout ── */}
       {activeTab === "details" && isMobile ? (
