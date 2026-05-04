@@ -181,6 +181,7 @@ const CardDetailModal = ({ cardId, siblingIds = [], onChangeCardId, onClose }: P
       onExplain={fetchAI} onAdd={addToCollection} adding={adding}
       hasPrev={hasPrev} hasNext={hasNext} onPrev={goPrev} onNext={goNext}
       isMobile={isMobile}
+      fmtScryfall={fmtScryfall}
     />
   );
 
@@ -316,11 +317,12 @@ interface BodyProps {
   onPrev: () => void;
   onNext: () => void;
   isMobile: boolean;
+  fmtScryfall: (prices: ScryfallCard["prices"], foil?: boolean) => string;
 }
 
 const CardDetailBody = ({
   card, loading, math, mathLoading, ai, aiLoading, aiError,
-  onExplain, onAdd, adding, hasPrev, hasNext, onPrev, onNext, isMobile,
+  onExplain, onAdd, adding, hasPrev, hasNext, onPrev, onNext, isMobile, fmtScryfall,
 }: BodyProps) => {
   if (loading || !card) {
     return (
