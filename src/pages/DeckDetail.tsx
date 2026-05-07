@@ -57,7 +57,49 @@ interface DeckAnalysis {
   suggestions: string[];
   curve_assessment: string;
   win_conditions: string[];
-  rating: number; // 1-10
+  rating: number;
+}
+
+interface CardPrices {
+  usd: number | null;       // TCGPlayer low / Scryfall usd
+  usd_mid: number | null;   // TCGPlayer mid
+  usd_high: number | null;  // TCGPlayer high
+  eur: number | null;
+  usd_foil: number | null;
+}
+
+// Fetch prices for all deck cards via Scryfall collection endpoint
+async function fetchDeckPrices(cards: DeckCard[]): Promise<Record<string, CardPrices>> {
+  const identifiers = cards
+    .filter((c) => c.scryfall_id && c.scryfall_id !== "unknown")
+    .map((c) => ({ id: c.scryfall_id }));
+
+  if (!identifiers.length) return {};
+
+  // Scryfall /cards/collection accepts up to 75 identifiers per request
+  const results: Record<string, CardPrices> = {};
+  for (let i = 0; i < identifiers.length; i += 75) {
+    const chunk = identifiers.slice(i, i + 75);
+    try {
+      const res = await fetch("https://api.scryfall.com/cards/collection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifiers: chunk }),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      for (const card of (data.data ?? [])) {
+        results[card.id] = {
+          usd:      card.prices?.usd      ? Number(card.prices.usd)      : null,
+          usd_mid:  card.prices?.usd_mid  ? Number(card.prices.usd_mid)  : null,
+          usd_high: card.prices?.usd_high ? Number(card.prices.usd_high) : null,
+          eur:      card.prices?.eur      ? Number(card.prices.eur)      : null,
+          usd_foil: card.prices?.usd_foil ? Number(card.prices.usd_foil) : null,
+        };
+      }
+    } catch { /* silent */ }
+  }
+  return results;
 }
 
 const MANA_COLOR: Record<string, string> = {
@@ -94,7 +136,6 @@ function groupByType(cards: DeckCard[]) {
 const TYPE_ORDER = ["Commanders","Creatures","Instants","Sorceries","Enchantments","Artifacts","Planeswalkers","Lands","Other"];
 
 export default function DeckDetail() {
-  const { fmtScryfall } = useCurrency();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
@@ -119,7 +160,10 @@ export default function DeckDetail() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysis, setAnalysis]           = useState<DeckAnalysis | null>(null);
 
-  // Add card search
+  // Live market prices
+  const [prices, setPrices] = useState<Record<string, CardPrices>>({});
+  const [pricesLoading, setPricesLoading] = useState(false);
+  const [priceView, setPriceView] = useState<"low" | "mid" | "high">("mid");
   const [addQuery, setAddQuery] = useState("");
   const [addResults, setAddResults] = useState<ScryfallCard[]>([]);
   const [addBusy, setAddBusy] = useState(false);
@@ -143,6 +187,14 @@ export default function DeckDetail() {
     setCards(cardData ?? []);
     setOwnedIds(new Set((collectionData ?? []).map((c) => c.scryfall_id)));
     setLoading(false);
+    // Fetch live prices in background
+    if (cardData?.length) {
+      setPricesLoading(true);
+      fetchDeckPrices(cardData as DeckCard[]).then((p) => {
+        setPrices(p);
+        setPricesLoading(false);
+      });
+    }
   };
 
   const handleExport = () => {
@@ -357,6 +409,36 @@ Return ONLY valid JSON (no markdown, no code fences):
     return Object.entries(t).map(([name, value]) => ({ name, value, fill: MANA_HEX[name] ?? "#888" }));
   })();
 
+  // Price helpers
+  const { fmt, currency } = useCurrency();
+
+  function getCardPrice(card: DeckCard): number | null {
+    const p = prices[card.scryfall_id];
+    if (!p) return null;
+    if (priceView === "low")  return p.usd;
+    if (priceView === "mid")  return p.usd_mid ?? p.usd;
+    if (priceView === "high") return p.usd_high ?? p.usd;
+    return p.usd;
+  }
+
+  function fmtCardPrice(card: DeckCard): string {
+    const val = getCardPrice(card);
+    if (val == null) return "";
+    return fmt(val);
+  }
+
+  const deckTotals = (() => {
+    let low = 0, mid = 0, high = 0, missing = 0;
+    for (const card of cards) {
+      const p = prices[card.scryfall_id];
+      if (!p) { missing++; continue; }
+      low  += (p.usd ?? 0)                       * card.quantity;
+      mid  += (p.usd_mid  ?? p.usd ?? 0)         * card.quantity;
+      high += (p.usd_high ?? p.usd_mid ?? p.usd ?? 0) * card.quantity;
+    }
+    return { low, mid, high, missing };
+  })();
+
   if (loading) return (
     <div className="flex items-center justify-center py-24 gap-2 text-muted-foreground">
       <Loader2 className="h-5 w-5 animate-spin" /> Loading deck…
@@ -390,6 +472,48 @@ Return ONLY valid JSON (no markdown, no code fences):
               )}
             </div>
             {deck.description && <p className="mt-1 text-sm text-muted-foreground">{deck.description}</p>}
+
+            {/* ── Live Market Price Panel ── */}
+            <div className="mt-3 rounded-xl border border-border/60 bg-card p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <TrendingUp className="h-3 w-3" />
+                  Market Value
+                  {pricesLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+                </p>
+                {/* Low / Mid / High toggle */}
+                <div className="flex rounded-md border border-border/60 overflow-hidden text-[10px]">
+                  {(["low","mid","high"] as const).map((v) => (
+                    <button key={v} onClick={() => setPriceView(v)}
+                      className={`px-2 py-1 capitalize transition-colors ${priceView === v ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}`}>
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {(["low","mid","high"] as const).map((tier, i) => {
+                  const val = [deckTotals.low, deckTotals.mid, deckTotals.high][i];
+                  const isActive = priceView === tier;
+                  return (
+                    <button key={tier} onClick={() => setPriceView(tier)}
+                      className={`flex flex-col items-center rounded-lg border p-2 transition-all ${isActive ? "border-primary/50 bg-primary/8 ring-1 ring-primary/20" : "border-border/40 bg-secondary/20 hover:border-border"}`}>
+                      <span className="text-[9px] uppercase tracking-wider text-muted-foreground">{tier}</span>
+                      <span className={`text-sm font-bold mt-0.5 ${isActive ? "text-primary" : "text-foreground"}`}>
+                        {pricesLoading ? "…" : fmt(val)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {!pricesLoading && deckTotals.missing > 0 && (
+                <p className="text-[10px] text-muted-foreground/60">
+                  {deckTotals.missing} card{deckTotals.missing !== 1 ? "s" : ""} without pricing data
+                </p>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2 ml-10 md:ml-0">
@@ -532,7 +656,7 @@ Return ONLY valid JSON (no markdown, no code fences):
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {ownedIds.has(card.id) && <CheckCircle2 className="h-3.5 w-3.5 text-mana-green" title="In collection" />}
-                  {fmtScryfall(card.prices) && <span className="text-xs text-mana-green">{fmtScryfall(card.prices)}</span>}
+                  {fmtCardPrice(card) && <span className="text-xs text-mana-green">{fmtCardPrice(card)}</span>}
                   <Button size="sm" className="h-7 text-xs bg-gradient-to-r from-primary to-primary-glow text-primary-foreground hover:opacity-90" disabled={addingCard === card.id} onClick={() => addCardToDeck(card)}>
                     {addingCard === card.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Plus className="h-3 w-3 mr-1" /> Add</>}
                   </Button>
